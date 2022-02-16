@@ -168,9 +168,6 @@ class SqlEventLogStorage(EventLogStorage):
                         "last_materialization_timestamp": utc_datetime_from_timestamp(
                             event.timestamp
                         ),
-                        "tags": seven.json.dumps(materialization.tags)
-                        if materialization.tags
-                        else None,
                     }
                 )
         elif event.dagster_event.is_asset_materialization_planned:

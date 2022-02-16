@@ -19,7 +19,6 @@ from typing import (
 from dagster import check, seven
 from dagster.core.errors import DagsterInvalidAssetKey
 from dagster.serdes import DefaultNamedTupleSerializer, whitelist_for_serdes
-from dagster.utils.backcompat import experimental_class_param_warning
 
 from .metadata import (
     MetadataEntry,
@@ -345,7 +344,6 @@ class AssetMaterialization(
             ("description", Optional[str]),
             ("metadata_entries", List[Union[MetadataEntry, PartitionMetadataEntry]]),
             ("partition", Optional[str]),
-            ("tags", Dict[str, str]),
         ],
     )
 ):
@@ -367,9 +365,6 @@ class AssetMaterialization(
         metadata_entries (Optional[List[Union[MetadataEntry, PartitionMetadataEntry]]]): Arbitrary metadata about the
             materialized value.
         partition (Optional[str]): The name of the partition that was materialized.
-        tags (Optional[Dict[str, str]]): (Experimental) Tag metadata for a given asset
-            materialization.  Used for search and organization of the asset entry in the asset
-            catalog in Dagit.
         metadata (Optional[Dict[str, RawMetadataValue]]):
             Arbitrary metadata about the asset.  Keys are displayed string labels, and values are
             one of the following: string, float, int, JSON-serializable dict, JSON-serializable
@@ -382,7 +377,6 @@ class AssetMaterialization(
         description: Optional[str] = None,
         metadata_entries: Optional[List[Union[MetadataEntry, PartitionMetadataEntry]]] = None,
         partition: Optional[str] = None,
-        tags: Optional[Dict[str, str]] = None,
         metadata: Optional[Dict[str, RawMetadataValue]] = None,
     ):
         if isinstance(asset_key, AssetKey):
@@ -396,9 +390,6 @@ class AssetMaterialization(
             check.tuple_param(asset_key, "asset_key", of_type=str)
             asset_key = AssetKey(asset_key)
 
-        if tags:
-            experimental_class_param_warning("tags", "AssetMaterialization")
-
         metadata = check.opt_dict_param(metadata, "metadata", key_type=str)
         metadata_entries = check.opt_list_param(
             metadata_entries, "metadata_entries", of_type=MetadataEntry
@@ -410,7 +401,6 @@ class AssetMaterialization(
             description=check.opt_str_param(description, "description"),
             metadata_entries=normalize_metadata(metadata, metadata_entries),
             partition=check.opt_str_param(partition, "partition"),
-            tags=check.opt_dict_param(tags, "tags", key_type=str, value_type=str),
         )
 
     @property
@@ -457,7 +447,6 @@ class Materialization(
             ("metadata_entries", List[MetadataEntry]),
             ("asset_key", AssetKey),
             ("partition", Optional[str]),
-            ("tags", Dict[str, str]),
         ],
     )
 ):
@@ -479,9 +468,6 @@ class Materialization(
         asset_key (Optional[Union[str, AssetKey]]): An optional parameter to identify the materialized asset
             across runs
         partition (Optional[str]): The name of the partition that was materialized.
-        tags (Optional[Dict[str, str]]): (Experimental) Tag metadata for a given asset
-            materialization.  Used for search and organization of the asset entry in the asset
-            catalog in Dagit.
     """
 
     def __new__(
@@ -491,7 +477,6 @@ class Materialization(
         metadata_entries: Optional[List[MetadataEntry]] = None,
         asset_key: Optional[Union[str, AssetKey]] = None,
         partition: Optional[str] = None,
-        tags: Optional[Dict[str, str]] = None,
         skip_deprecation_warning: Optional[bool] = False,
     ):
         if asset_key and isinstance(asset_key, str):
@@ -524,7 +509,6 @@ class Materialization(
             ),
             asset_key=asset_key,
             partition=check.opt_str_param(partition, "partition"),
-            tags=check.opt_dict_param(tags, "tags"),
         )
 
     @staticmethod
