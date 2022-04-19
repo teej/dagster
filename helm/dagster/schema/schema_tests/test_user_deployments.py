@@ -498,6 +498,11 @@ def _assert_no_container_context(user_deployment):
     assert "DAGSTER_CLI_API_GRPC_CONTAINER_CONTEXT" not in env_names
 
 
+def _assert_has_container_context(user_deployment):
+    env_names = [env.name for env in user_deployment.spec.template.spec.containers[0].env]
+    assert "DAGSTER_CLI_API_GRPC_CONTAINER_CONTEXT" in env_names
+
+
 def test_user_deployment_image(template: HelmTemplate):
     deployment = create_simple_user_deployment("foo")
     helm_values = DagsterHelmValues.construct(
@@ -517,6 +522,23 @@ def test_user_deployment_image(template: HelmTemplate):
 
     assert image_name == deployment.image.repository
     assert image_tag == deployment.image.tag
+
+    _assert_has_container_context(user_deployments[0])
+
+
+def test_user_deployment_exclude_config(template: HelmTemplate):
+    deployment = create_simple_user_deployment("foo", include_config_in_launched_runs=False)
+    helm_values = DagsterHelmValues.construct(
+        dagsterUserDeployments=UserDeployments(
+            enabled=True,
+            enableSubchart=True,
+            deployments=[deployment],
+        )
+    )
+
+    user_deployments = template.render(helm_values)
+
+    assert len(user_deployments) == 1
 
     _assert_no_container_context(user_deployments[0])
 

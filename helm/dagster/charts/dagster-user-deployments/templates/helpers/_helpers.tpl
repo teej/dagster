@@ -92,6 +92,21 @@ DAGSTER_K8S_PIPELINE_RUN_NAMESPACE: "{{ .Release.Namespace }}"
 DAGSTER_K8S_PIPELINE_RUN_ENV_CONFIGMAP: "{{ template "dagster.fullname" . }}-pipeline-env"
 {{- end -}}
 
+{{/*
+Whether a deployment should include config in its launched runs (defaults to true if includeConfigInLaunchedRuns.enabled
+is not explicitly set to a false-y value)
+*/}}
+{{- define "dagsterUserDeployments.includeConfigInLaunchedRuns" }}
+{{- if .includeConfigInLaunchedRuns -}}
+{{- if or .includeConfigInLaunchedRuns.enabled (not (hasKey .includeConfigInLaunchedRuns "enabled")) -}}
+true
+{{- else }}
+false
+{{- end -}}
+{{- else -}}
+true
+{{- end -}}
+{{- end -}}
 
 {{- define "dagsterUserDeployments.k8sContainerContext" -}}
   {{- $ := index . 0 }}
