@@ -18,6 +18,7 @@ from dagster.builtins import Nothing
 from dagster.config import Field
 from dagster.core.decorator_utils import get_function_params, get_valid_name_permutations
 from dagster.core.definitions.decorators.op_decorator import _Op
+from dagster.core.definitions.definition_config_schema import IDefinitionConfigSchema
 from dagster.core.definitions.events import AssetKey
 from dagster.core.definitions.input import In
 from dagster.core.definitions.output import Out
@@ -52,6 +53,7 @@ def asset(
     required_resource_keys: Optional[Set[str]] = ...,
     io_manager_key: Optional[str] = ...,
     compute_kind: Optional[str] = ...,
+    config_schema: Optional[IDefinitionConfigSchema] = None,
     dagster_type: Optional[DagsterType] = ...,
     partitions_def: Optional[PartitionsDefinition] = ...,
     partition_mappings: Optional[Mapping[str, PartitionMapping]] = ...,
@@ -71,6 +73,7 @@ def asset(
     required_resource_keys: Optional[Set[str]] = None,
     io_manager_key: Optional[str] = None,
     compute_kind: Optional[str] = None,
+    config_schema: Optional[IDefinitionConfigSchema] = None,
     dagster_type: Optional[DagsterType] = None,
     partitions_def: Optional[PartitionsDefinition] = None,
     partition_mappings: Optional[Mapping[str, PartitionMapping]] = None,
@@ -137,6 +140,7 @@ def asset(
             non_argument_deps=non_argument_deps,
             metadata=metadata,
             description=description,
+            config_schema=config_schema,
             required_resource_keys=required_resource_keys,
             io_manager_key=io_manager_key,
             compute_kind=check.opt_str_param(compute_kind, "compute_kind"),
@@ -158,6 +162,7 @@ class _Asset:
         non_argument_deps: Optional[Set[AssetKey]] = None,
         metadata: Optional[Mapping[str, Any]] = None,
         description: Optional[str] = None,
+        config_schema: Optional[Union[Dict[str, Any], IDefinitionConfigSchema]] = None,
         required_resource_keys: Optional[Set[str]] = None,
         io_manager_key: Optional[str] = None,
         compute_kind: Optional[str] = None,
@@ -173,6 +178,7 @@ class _Asset:
         self.non_argument_deps = non_argument_deps
         self.metadata = metadata
         self.description = description
+        self.config_schema = config_schema or {}
         self.required_resource_keys = required_resource_keys
         self.io_manager_key = io_manager_key
         self.compute_kind = compute_kind
@@ -205,6 +211,8 @@ class _Asset:
                 asset_partitions=partition_fn,
             )
 
+            print("CONFIG SCHEMA IS")
+            print(self.config_schema)
             op = _Op(
                 name="__".join(out_asset_key.path),
                 description=self.description,
@@ -219,7 +227,7 @@ class _Asset:
                     "assets": {
                         "input_partitions": Field(dict, is_required=False),
                         "output_partitions": Field(dict, is_required=False),
-                    }
+                    }, **self.config_schema
                 },
             )(fn)
 
