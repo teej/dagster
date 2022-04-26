@@ -16,9 +16,9 @@ from typing import (
 from dagster import check
 from dagster.builtins import Nothing
 from dagster.config import Field
+from dagster.config.config_schema import ConfigSchemaType
 from dagster.core.decorator_utils import get_function_params, get_valid_name_permutations
 from dagster.core.definitions.decorators.op_decorator import _Op
-from dagster.core.definitions.definition_config_schema import IDefinitionConfigSchema
 from dagster.core.definitions.events import AssetKey
 from dagster.core.definitions.input import In
 from dagster.core.definitions.output import Out
@@ -50,7 +50,7 @@ def asset(
     non_argument_deps: Optional[Set[AssetKey]] = ...,
     metadata: Optional[Mapping[str, Any]] = ...,
     description: Optional[str] = ...,
-    config_schema: Optional[Dict[str, Any]] = None,
+    config_schema: Optional[ConfigSchemaType] = None,
     required_resource_keys: Optional[Set[str]] = ...,
     io_manager_key: Optional[str] = ...,
     compute_kind: Optional[str] = ...,
@@ -70,7 +70,7 @@ def asset(
     non_argument_deps: Optional[Set[AssetKey]] = None,
     metadata: Optional[Mapping[str, Any]] = None,
     description: Optional[str] = None,
-    config_schema: Optional[Dict[str, Any]] = None,
+    config_schema: Optional[ConfigSchemaType] = None,
     required_resource_keys: Optional[Set[str]] = None,
     io_manager_key: Optional[str] = None,
     compute_kind: Optional[str] = None,
@@ -165,7 +165,7 @@ class _Asset:
         non_argument_deps: Optional[Set[AssetKey]] = None,
         metadata: Optional[Mapping[str, Any]] = None,
         description: Optional[str] = None,
-        config_schema: Optional[Dict[str, Any]] = None,
+        config_schema: Optional[ConfigSchemaType] = None,
         required_resource_keys: Optional[Set[str]] = None,
         io_manager_key: Optional[str] = None,
         compute_kind: Optional[str] = None,
@@ -260,7 +260,7 @@ def multi_asset(
     ins: Optional[Mapping[str, AssetIn]] = None,
     non_argument_deps: Optional[Set[AssetKey]] = None,
     description: Optional[str] = None,
-    config_schema: Optional[Dict[str, Any]] = None,
+    config_schema: Optional[ConfigSchemaType] = None,
     required_resource_keys: Optional[Set[str]] = None,
     compute_kind: Optional[str] = None,
     internal_asset_deps: Optional[Mapping[str, Set[AssetKey]]] = None,
