@@ -52,6 +52,22 @@ def test_asset_with_inputs():
     assert my_asset.op.input_defs[0].get_asset_key(None) == AssetKey("arg1")
 
 
+def test_asset_with_config_schema():
+    @asset(config_schema={"foo": int})
+    def my_asset(arg1):
+        return arg1
+
+    assert my_asset.op.config_schema
+
+
+def test_multi_asset_with_config_schema():
+    @multi_asset(outs={"o1": Out(asset_key=AssetKey("o1"))}, config_schema={"foo": int})
+    def my_asset(arg1):
+        return arg1
+
+    assert my_asset.op.config_schema
+
+
 def test_asset_with_compute_kind():
     @asset(compute_kind="sql")
     def my_asset(arg1):
