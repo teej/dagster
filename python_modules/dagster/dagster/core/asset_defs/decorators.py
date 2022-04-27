@@ -181,7 +181,11 @@ class _Asset:
         self.non_argument_deps = non_argument_deps
         self.metadata = metadata
         self.description = description
-        self.config_schema = config_schema or {}
+        self.config_schema = check.opt_dict_param(
+            config_schema,
+            "config_schema",
+            additional_message="Only dicts are supported for asset config_schema.",
+        )
         self.required_resource_keys = required_resource_keys
         self.io_manager_key = io_manager_key
         self.compute_kind = compute_kind
