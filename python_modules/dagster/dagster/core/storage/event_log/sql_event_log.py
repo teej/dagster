@@ -162,7 +162,6 @@ class SqlEventLogStorage(EventLogStorage):
                 }
             )
             if has_asset_key_index_cols:
-                materialization = event.dagster_event.step_materialization_data.materialization
                 entry_values.update(
                     {
                         "last_materialization_timestamp": utc_datetime_from_timestamp(
