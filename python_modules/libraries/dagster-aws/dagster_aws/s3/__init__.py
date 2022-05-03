@@ -1,5 +1,4 @@
 from .compute_log_manager import S3ComputeLogManager
-from .file_cache import S3FileCache, s3_file_cache
 from .file_manager import S3FileHandle, S3FileManager
 from .io_manager import (
     PickledObjectS3AssetIOManager,
