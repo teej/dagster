@@ -386,7 +386,11 @@ const AssetGraphExplorerWithData: React.FC<
                   {Object.values(layout.bundles)
                     .sort((a, b) => a.id.length - b.id.length)
                     .map(({id, bounds}) => {
-                      if (experiments && _scale < EXPERIMENTAL_MINI_SCALE) {
+                      if (
+                        experiments &&
+                        _scale < EXPERIMENTAL_MINI_SCALE &&
+                        !explorerPath.opsQuery.includes(tokenForAssetKey({path: JSON.parse(id)}))
+                      ) {
                         const path = JSON.parse(id);
                         return (
                           <foreignObject
@@ -462,10 +466,16 @@ const AssetGraphExplorerWithData: React.FC<
                     }
 
                     if (experiments) {
-                      const isWithinBundle = Object.keys(layout.bundles).some((bundleId) =>
+                      const parentBundle = Object.keys(layout.bundles).find((bundleId) =>
                         hasPathPrefix(path, JSON.parse(bundleId)),
                       );
-                      if (isWithinBundle && _scale < EXPERIMENTAL_MINI_SCALE) {
+                      if (
+                        parentBundle &&
+                        _scale < EXPERIMENTAL_MINI_SCALE &&
+                        !explorerPath.opsQuery.includes(
+                          tokenForAssetKey({path: JSON.parse(parentBundle)}),
+                        )
+                      ) {
                         return null;
                       }
                     }

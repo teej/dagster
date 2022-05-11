@@ -39,6 +39,7 @@ import expand_more from '../icon-svgs/expand_more.svg';
 import filter_alt from '../icon-svgs/filter_alt.svg';
 import folder from '../icon-svgs/folder.svg';
 import folder_open from '../icon-svgs/folder_open.svg';
+import grid from '../icon-svgs/grid.svg';
 import gantt_flat from '../icon-svgs/gantt_flat.svg';
 import gantt_waterfall from '../icon-svgs/gantt_waterfall.svg';
 import history from '../icon-svgs/history.svg';
@@ -144,6 +145,7 @@ export const Icons = {
   folder,
   tag,
   slack,
+  grid,
 
   // Material icons
   add_circle,

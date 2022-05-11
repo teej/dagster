@@ -17,7 +17,7 @@ export const AssetViewModeSwitch = () => {
     {id: 'directory', icon: 'folder', tooltip: 'Folder view'},
   ];
   if (flagExperimentalAssetDAG) {
-    buttons.unshift({id: 'grid', icon: 'source', tooltip: 'Grid view'});
+    buttons.unshift({id: 'grid', icon: 'grid', tooltip: 'Grid view'});
   }
 
   const setView = (view: AssetViewType) => {

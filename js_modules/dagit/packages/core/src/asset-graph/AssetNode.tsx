@@ -14,7 +14,12 @@ import {TimestampDisplay} from '../schedules/TimestampDisplay';
 import {markdownToPlaintext} from '../ui/markdownToPlaintext';
 
 import {displayNameForAssetKey, LiveDataForNode} from './Utils';
-import {ASSET_NODE_ANNOTATIONS_MAX_WIDTH, ASSET_NODE_NAME_MAX_LENGTH} from './layout';
+import {
+  assetNameMaxlengthForWidth,
+  ASSET_NODE_ANNOTATIONS_MAX_WIDTH,
+  ASSET_NODE_ICON_WIDTH,
+  ASSET_NODE_NAME_MAX_LENGTH,
+} from './layout';
 import {AssetNodeFragment} from './types/AssetNodeFragment';
 
 const MISSING_LIVE_DATA = {
@@ -28,13 +33,14 @@ export const AssetNode: React.FC<{
   definition: AssetNodeFragment;
   liveData?: LiveDataForNode;
   selected: boolean;
+  width?: number;
   padded?: boolean;
   inAssetCatalog?: boolean;
-}> = React.memo(({definition, selected, liveData, inAssetCatalog, padded = true}) => {
+}> = React.memo(({definition, selected, liveData, inAssetCatalog, width, padded = true}) => {
   const stepKey = definition.opName || '';
 
   const displayName = withMiddleTruncation(displayNameForAssetKey(definition.assetKey), {
-    maxLength: ASSET_NODE_NAME_MAX_LENGTH,
+    maxLength: width ? assetNameMaxlengthForWidth(width) : ASSET_NODE_NAME_MAX_LENGTH,
   });
 
   const {lastMaterialization, unstartedRunIds, inProgressRunIds, runWhichFailedToMaterialize} =
@@ -169,7 +175,11 @@ export const AssetNodeMinimal: React.FC<{
     maxLength: 17,
   });
   return (
-    <AssetNodeContainer $selected={selected} style={{position: 'absolute', borderRadius: 12}}>
+    <AssetNodeContainer
+      $padded={true}
+      $selected={selected}
+      style={{position: 'absolute', borderRadius: 12}}
+    >
       <AssetNodeBox
         style={{
           border: `4px solid ${Colors.Blue200}`,
@@ -245,22 +255,21 @@ const BoxColors = {
   Stats: 'rgba(236, 236, 248, 1)',
 };
 
-export const AssetNodeContainer = styled.div<{$selected: boolean; $padded?: boolean}>`
+export const AssetNodeContainer = styled.div<{$selected: boolean; $padded: boolean}>`
   outline: ${(p) => (p.$selected ? `2px dashed ${NodeHighlightColors.Border}` : 'none')};
   border-radius: 6px;
   outline-offset: -1px;
+  background: ${(p) => (p.$selected ? NodeHighlightColors.Background : 'white')};
+  inset: 0;
+
   ${(p) =>
-    p.$padded
-      ? `
+    p.$padded &&
+    `
   padding: 4px;
   margin-top: 10px;
   margin-right: 4px;
   margin-left: 4px;
-  margin-bottom: 2px;
-  `
-      : ''}
-  background: ${(p) => (p.$selected ? NodeHighlightColors.Background : 'white')};
-  inset: 0;
+  margin-bottom: 2px;`}
 `;
 
 export const AssetNodeBox = styled.div`
