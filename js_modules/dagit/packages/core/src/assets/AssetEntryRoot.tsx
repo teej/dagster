@@ -32,7 +32,7 @@ export const AssetEntryRoot = () => {
   ) : queryResult.data?.assetOrError.__typename === 'AssetNotFoundError' ? (
     <Page>
       <AssetPageHeader assetKey={{path: currentPath}} />
-      <AssetsCatalogTable prefixPath={currentPath} />
+      {/* <AssetsCatalogTable matching={[currentPath]} /> */}
     </Page>
   ) : (
     <Page>

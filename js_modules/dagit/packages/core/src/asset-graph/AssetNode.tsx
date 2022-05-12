@@ -17,7 +17,6 @@ import {displayNameForAssetKey, LiveDataForNode} from './Utils';
 import {
   assetNameMaxlengthForWidth,
   ASSET_NODE_ANNOTATIONS_MAX_WIDTH,
-  ASSET_NODE_ICON_WIDTH,
   ASSET_NODE_NAME_MAX_LENGTH,
 } from './layout';
 import {AssetNodeFragment} from './types/AssetNodeFragment';
@@ -43,8 +42,7 @@ export const AssetNode: React.FC<{
     maxLength: width ? assetNameMaxlengthForWidth(width) : ASSET_NODE_NAME_MAX_LENGTH,
   });
 
-  const {lastMaterialization, unstartedRunIds, inProgressRunIds, runWhichFailedToMaterialize} =
-    liveData || MISSING_LIVE_DATA;
+  const {lastMaterialization} = liveData || MISSING_LIVE_DATA;
 
   return (
     <AssetNodeContainer $selected={selected} $padded={padded}>
@@ -108,40 +106,7 @@ export const AssetNode: React.FC<{
           )}
           <StatsRow>
             <span>Latest Run</span>
-
-            {inProgressRunIds?.length > 0 ? (
-              <Box flex={{gap: 4, alignItems: 'center'}}>
-                <Tooltip content="A run is currently rematerializing this asset.">
-                  <Spinner purpose="body-text" />
-                </Tooltip>
-                <AssetRunLink runId={inProgressRunIds[0]} />
-              </Box>
-            ) : unstartedRunIds?.length > 0 ? (
-              <Box flex={{gap: 4, alignItems: 'center'}}>
-                <Tooltip content="A run has started that will rematerialize this asset soon.">
-                  <Spinner purpose="body-text" stopped />
-                </Tooltip>
-                <AssetRunLink runId={unstartedRunIds[0]} />
-              </Box>
-            ) : runWhichFailedToMaterialize?.__typename === 'Run' ? (
-              <Box flex={{gap: 4, alignItems: 'center'}}>
-                <Tooltip
-                  content={`Run ${titleForRun({
-                    runId: runWhichFailedToMaterialize.id,
-                  })} failed to materialize this asset`}
-                >
-                  <Icon name="warning" color={Colors.Red500} />
-                </Tooltip>
-                <AssetRunLink runId={runWhichFailedToMaterialize.id} />
-              </Box>
-            ) : lastMaterialization ? (
-              <AssetRunLink
-                runId={lastMaterialization.runId}
-                event={{stepKey, timestamp: lastMaterialization.timestamp}}
-              />
-            ) : (
-              <span>–</span>
-            )}
+            <AssetLatestRunWithNotices liveData={liveData} stepKey={stepKey} />
           </StatsRow>
         </Stats>
         {definition.computeKind && (
@@ -165,6 +130,47 @@ export const AssetNode: React.FC<{
   );
 }, isEqual);
 
+export const AssetLatestRunWithNotices: React.FC<{
+  liveData: LiveDataForNode | undefined;
+  stepKey: string | null;
+}> = ({liveData, stepKey}) => {
+  const {lastMaterialization, unstartedRunIds, inProgressRunIds, runWhichFailedToMaterialize} =
+    liveData || MISSING_LIVE_DATA;
+
+  return inProgressRunIds?.length > 0 ? (
+    <Box flex={{gap: 4, alignItems: 'center'}}>
+      <Tooltip content="A run is currently rematerializing this asset.">
+        <Spinner purpose="body-text" />
+      </Tooltip>
+      <AssetRunLink runId={inProgressRunIds[0]} />
+    </Box>
+  ) : unstartedRunIds?.length > 0 ? (
+    <Box flex={{gap: 4, alignItems: 'center'}}>
+      <Tooltip content="A run has started that will rematerialize this asset soon.">
+        <Spinner purpose="body-text" stopped />
+      </Tooltip>
+      <AssetRunLink runId={unstartedRunIds[0]} />
+    </Box>
+  ) : runWhichFailedToMaterialize?.__typename === 'Run' ? (
+    <Box flex={{gap: 4, alignItems: 'center'}}>
+      <Tooltip
+        content={`Run ${titleForRun({
+          runId: runWhichFailedToMaterialize.id,
+        })} failed to materialize this asset`}
+      >
+        <Icon name="warning" color={Colors.Red500} />
+      </Tooltip>
+      <AssetRunLink runId={runWhichFailedToMaterialize.id} />
+    </Box>
+  ) : lastMaterialization ? (
+    <AssetRunLink
+      runId={lastMaterialization.runId}
+      event={{stepKey, timestamp: lastMaterialization.timestamp}}
+    />
+  ) : (
+    <span>–</span>
+  );
+};
 export const AssetNodeMinimal: React.FC<{
   selected: boolean;
   definition: {assetKey: AssetKey};
@@ -274,7 +280,7 @@ export const AssetNodeContainer = styled.div<{$selected: boolean; $padded: boole
 
 export const AssetNodeBox = styled.div`
   border: 2px solid ${Colors.Blue200};
-  background: ${Colors.White};
+  background: ${BoxColors.Stats};
   border-radius: 5px;
   position: relative;
   &:hover {

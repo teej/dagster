@@ -324,10 +324,6 @@ const AssetGraphExplorerWithData: React.FC<
     [viewportEl],
   );
 
-  const allBundleNames = React.useMemo(() => {
-    return Object.keys(identifyBundles(props.allAssetKeys.map((a) => JSON.stringify(a.path))));
-  }, [props.allAssetKeys]);
-
   return (
     <SplitPanelContainer
       identifier="explorer"
@@ -386,11 +382,7 @@ const AssetGraphExplorerWithData: React.FC<
                   {Object.values(layout.bundles)
                     .sort((a, b) => a.id.length - b.id.length)
                     .map(({id, bounds}) => {
-                      if (
-                        experiments &&
-                        _scale < EXPERIMENTAL_MINI_SCALE &&
-                        !explorerPath.opsQuery.includes(tokenForAssetKey({path: JSON.parse(id)}))
-                      ) {
+                      if (experiments && _scale < EXPERIMENTAL_MINI_SCALE) {
                         const path = JSON.parse(id);
                         return (
                           <foreignObject
@@ -466,16 +458,10 @@ const AssetGraphExplorerWithData: React.FC<
                     }
 
                     if (experiments) {
-                      const parentBundle = Object.keys(layout.bundles).find((bundleId) =>
+                      const isWithinBundle = Object.keys(layout.bundles).some((bundleId) =>
                         hasPathPrefix(path, JSON.parse(bundleId)),
                       );
-                      if (
-                        parentBundle &&
-                        _scale < EXPERIMENTAL_MINI_SCALE &&
-                        !explorerPath.opsQuery.includes(
-                          tokenForAssetKey({path: JSON.parse(parentBundle)}),
-                        )
-                      ) {
+                      if (isWithinBundle && _scale < EXPERIMENTAL_MINI_SCALE) {
                         return null;
                       }
                     }
@@ -568,46 +554,6 @@ const AssetGraphExplorerWithData: React.FC<
             </Box>
             {!props.pipelineSelector && <OmittedAssetsNotice assetKeys={props.allAssetKeys} />}
           </Box>
-          <QueryOverlay>
-            <GraphQueryInput
-              items={graphQueryItems}
-              value={explorerPath.opsQuery}
-              placeholder="Type an asset subset…"
-              onChange={(opsQuery) => onChangeExplorerPath({...explorerPath, opsQuery}, 'replace')}
-              popoverPosition="bottom-left"
-            />
-            {allBundleNames.length > 0 && (
-              <Suggest<string>
-                inputProps={{placeholder: 'View a folder'}}
-                items={allBundleNames}
-                itemRenderer={(folder, props) => (
-                  <MenuItem
-                    text={displayNameForAssetKey({path: JSON.parse(folder)})}
-                    active={props.modifiers.active}
-                    onClick={props.handleClick}
-                    key={folder}
-                  />
-                )}
-                noResults={<MenuItem disabled={true} text="Loading..." />}
-                inputValueRenderer={(str) => str}
-                selectedItem=""
-                onItemSelect={(item) => {
-                  onChangeExplorerPath(
-                    {
-                      ...explorerPath,
-                      opsQuery: [
-                        explorerPath.opsQuery,
-                        `${displayNameForAssetKey({path: JSON.parse(item)})}/`,
-                      ]
-                        .filter(Boolean)
-                        .join(','),
-                    },
-                    'replace',
-                  );
-                }}
-              />
-            )}
-          </QueryOverlay>
         </>
       }
       second={

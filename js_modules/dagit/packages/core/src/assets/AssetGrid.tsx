@@ -3,9 +3,7 @@ import {
   Button,
   Colors,
   FontFamily,
-  Heading,
   Icon,
-  PageHeader,
   SplitPanelContainer,
   Subheading,
   Table,
@@ -13,7 +11,6 @@ import {
 import flatMap from 'lodash/flatMap';
 import uniqBy from 'lodash/uniqBy';
 import * as React from 'react';
-import {useParams} from 'react-router';
 import {Link} from 'react-router-dom';
 
 import {
@@ -22,54 +19,32 @@ import {
   identifyBundles,
   tokenForAssetKey,
 } from '../asset-graph/Utils';
-import {useAssetGraphData} from '../asset-graph/useAssetGraphData';
 import {useViewport} from '../gantt/useViewport';
-import {
-  instanceAssetsExplorerPathFromString,
-  instanceAssetsExplorerPathToURL,
-} from '../pipelines/PipelinePathUtils';
-import {ReloadAllButton} from '../workspace/ReloadAllButton';
+import {instanceAssetsExplorerPathToURL} from '../pipelines/PipelinePathUtils';
 
-import {AssetViewModeSwitch} from './AssetViewModeSwitch';
 import styled from 'styled-components/macro';
-import {AssetNode} from '../asset-graph/AssetNode';
+import {
+  AssetLatestRunWithNotices,
+  AssetNode,
+  AssetNodeBox,
+  AssetRunLink,
+} from '../asset-graph/AssetNode';
 import {useLiveDataForAssetKeys} from '../asset-graph/useLiveDataForAssetKeys';
 import {SidebarAssetInfo} from '../asset-graph/SidebarAssetInfo';
 import {RightInfoPanel, RightInfoPanelContent} from '../pipelines/GraphExplorer';
 import {AssetKey} from './types';
+import {TimestampDisplay} from '../schedules/TimestampDisplay';
 
 const PADDING = 30;
-
-export const InstanceAssetGrid: React.FC = () => {
-  const params = useParams();
-  const explorerPath = instanceAssetsExplorerPathFromString(params[0]);
-  const {assetGraphData} = useAssetGraphData(null, explorerPath.opsQuery || '*');
-
-  return (
-    <Box
-      flex={{direction: 'column', justifyContent: 'stretch'}}
-      style={{height: '100%', position: 'relative'}}
-    >
-      <PageHeader title={<Heading>Assets</Heading>} />
-      <Box
-        background={Colors.White}
-        padding={{left: 24, right: 12, vertical: 8}}
-        border={{side: 'bottom', width: 1, color: Colors.KeylineGray}}
-        flex={{direction: 'row', gap: 12}}
-      >
-        <AssetViewModeSwitch />
-        <div style={{flex: 1}} />
-        <ReloadAllButton />
-      </Box>
-      <AssetGrid assetGraphData={assetGraphData} />
-    </Box>
-  );
-};
 
 interface Box {
   id: string;
   contentIds: string[];
   layout: {top: number; left: number; width: number; height: number};
+}
+
+function keyForAssetId(id: string) {
+  return {path: JSON.parse(id)};
 }
 
 function processGraphData(assetGraphData: GraphData | null) {
@@ -101,7 +76,7 @@ function processGraphData(assetGraphData: GraphData | null) {
   return {bundles, bundleForAssetId, unbundledAssetIds, renderedEdges};
 }
 
-const AssetGrid: React.FC<{
+export const AssetGrid: React.FC<{
   assetGraphData: GraphData | null;
 }> = ({assetGraphData}) => {
   const [selected, setSelected] = React.useState<string | null>(null);
@@ -115,7 +90,7 @@ const AssetGrid: React.FC<{
   const {liveDataByNode} = useLiveDataForAssetKeys(
     null,
     assetGraphData,
-    unbundledAssetIds.map((id) => ({path: JSON.parse(id)})),
+    unbundledAssetIds.map(keyForAssetId),
   );
 
   const edgeFocused = highlighted || selected;
@@ -219,14 +194,14 @@ const AssetGrid: React.FC<{
             <RightInfoPanelContent>
               {assetGraphData?.nodes[selected] ? (
                 <SidebarAssetInfo
-                  assetKey={{path: JSON.parse(selected)}}
+                  assetKey={keyForAssetId(selected)}
                   liveData={liveDataByNode[selected]}
                 />
               ) : (
                 <SidebarAssetBundleInfo
-                  bundleKey={{path: JSON.parse(selected)}}
+                  bundleKey={keyForAssetId(selected)}
                   assetGraphData={assetGraphData}
-                  assetKeys={bundles[selected].map((p) => ({path: JSON.parse(p)}))}
+                  assetIds={bundles[selected]}
                 />
               )}
             </RightInfoPanelContent>
@@ -242,7 +217,7 @@ const Folder: React.FC<{id: string; contentIds: string[]}> = ({id, contentIds}) 
     <Box flex={{gap: 8}} padding={{horizontal: 8, vertical: 4}}>
       <Icon name="folder" size={16} />
       <div style={{fontFamily: FontFamily.monospace, fontWeight: 600}}>
-        {displayNameForAssetKey({path: JSON.parse(id)})}
+        {displayNameForAssetKey(keyForAssetId(id))}
       </div>
     </Box>
     <Box
@@ -254,7 +229,7 @@ const Folder: React.FC<{id: string; contentIds: string[]}> = ({id, contentIds}) 
       <div> {contentIds.length} items</div>
       <Link
         to={instanceAssetsExplorerPathToURL({
-          opsQuery: `${tokenForAssetKey({path: JSON.parse(id)})}/`,
+          opsQuery: `${tokenForAssetKey(keyForAssetId(id))}/`,
           opNames: [],
         })}
       >
@@ -295,6 +270,10 @@ const FolderContainer = styled.div<{$selected: boolean; $faded?: boolean}>`
     border-top: 9px solid ${Colors.Gray300};
   }
 
+  ${AssetNodeBox} {
+    min-height: 108px;
+  }
+
   ${(p) =>
     p.$selected &&
     `
@@ -323,10 +302,14 @@ const FolderBox = styled.div`
 const SidebarAssetBundleInfo: React.FC<{
   bundleKey: AssetKey;
   assetGraphData: GraphData;
-  assetKeys: AssetKey[];
-}> = ({assetKeys, assetGraphData, bundleKey}) => {
-  const {liveDataByNode} = useLiveDataForAssetKeys(null, assetGraphData, assetKeys);
-
+  assetIds: string[];
+}> = ({assetIds, assetGraphData, bundleKey}) => {
+  const baseDisplayName = displayNameForAssetKey({path: [...bundleKey.path, '']});
+  const {liveDataByNode} = useLiveDataForAssetKeys(
+    null,
+    assetGraphData,
+    assetIds.map((id) => ({path: JSON.parse(id)})),
+  );
   return (
     <div>
       <Box
@@ -350,24 +333,52 @@ const SidebarAssetBundleInfo: React.FC<{
           <Button icon={<Icon name="schema" size={16} />}>View Graph</Button>
         </Link>
       </Box>
-      <Table>
+      <Table style={{minWidth: 0, maxWidth: '100%'}}>
         <thead>
           <tr>
             <th>Asset Key</th>
-            <th style={{width: 80}}>Materialized</th>
-            <th style={{width: 80}}>Latest Run</th>
+            <th style={{width: 100}}>Materialized</th>
+            <th style={{width: 100}}>Latest Run</th>
           </tr>
         </thead>
         <tbody>
-          {assetKeys.map((key) => (
-            <tr>
-              <td>
-                <Icon name="asset" size={16} />
-                {displayNameForAssetKey(key)}
-              </td>
-              <td></td>
-            </tr>
-          ))}
+          {assetIds.map((id) => {
+            const stepKey = assetGraphData.nodes[id].definition.opName;
+            const lastMaterialization = liveDataByNode[id]?.lastMaterialization;
+
+            return (
+              <tr key={id}>
+                <td style={{width: '100%', minWidth: 0, overflow: 'hidden'}}>
+                  <div>
+                    <Link to={`/instance/assets/${keyForAssetId(id).path.join('/')}`}>
+                      <Box flex={{gap: 8, alignItems: 'center'}}>
+                        <Icon name="asset" size={16} />
+                        {displayNameForAssetKey(keyForAssetId(id)).replace(baseDisplayName, './ ')}
+                      </Box>
+                    </Link>
+                  </div>
+                </td>
+                <td>
+                  {lastMaterialization ? (
+                    <AssetRunLink
+                      runId={lastMaterialization.runId}
+                      event={{stepKey, timestamp: lastMaterialization.timestamp}}
+                    >
+                      <TimestampDisplay
+                        timestamp={Number(lastMaterialization.timestamp) / 1000}
+                        timeFormat={{showSeconds: false, showTimezone: false}}
+                      />
+                    </AssetRunLink>
+                  ) : (
+                    '–'
+                  )}
+                </td>
+                <td>
+                  <AssetLatestRunWithNotices liveData={liveDataByNode[id]} stepKey={stepKey} />
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </Table>
     </div>

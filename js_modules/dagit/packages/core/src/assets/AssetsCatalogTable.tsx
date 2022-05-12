@@ -1,59 +1,54 @@
 import {gql, useQuery} from '@apollo/client';
 import * as React from 'react';
-import {Redirect} from 'react-router-dom';
 import styled from 'styled-components/macro';
 
-import {Box, CursorPaginationControls, CursorPaginationProps, TextInput} from '../../../ui/src';
+import {Box, CursorPaginationControls} from '../../../ui/src';
 import {PythonErrorInfo, PYTHON_ERROR_FRAGMENT} from '../app/PythonErrorInfo';
-import {
-  FIFTEEN_SECONDS,
-  QueryRefreshCountdown,
-  useQueryRefreshAtInterval,
-} from '../app/QueryRefresh';
-import {tokenForAssetKey} from '../asset-graph/Utils';
-import {useDocumentTitle} from '../hooks/useDocumentTitle';
+import {FIFTEEN_SECONDS, useQueryRefreshAtInterval} from '../app/QueryRefresh';
+import {GraphData, tokenForAssetKey} from '../asset-graph/Utils';
 import {useQueryPersistedState} from '../hooks/useQueryPersistedState';
 import {Loading} from '../ui/Loading';
 import {StickyTableContainer} from '../ui/StickyTableContainer';
 
 import {AssetTable, ASSET_TABLE_FRAGMENT} from './AssetTable';
-import {AssetViewModeSwitch} from './AssetViewModeSwitch';
 import {AssetsEmptyState} from './AssetsEmptyState';
 import {
   AssetCatalogTableQuery,
   AssetCatalogTableQuery_assetsOrError_AssetConnection_nodes,
 } from './types/AssetCatalogTableQuery';
 import {useAssetView} from './useAssetView';
+import {ExplorerPath} from '../pipelines/PipelinePathUtils';
 
 const PAGE_SIZE = 50;
 
 type Asset = AssetCatalogTableQuery_assetsOrError_AssetConnection_nodes;
 
-export const AssetsCatalogTable: React.FC<{prefixPath?: string[]}> = ({prefixPath = []}) => {
+export const AssetsCatalogTable: React.FC<{
+  explorerPath: ExplorerPath;
+  assetGraphData: GraphData | null;
+}> = ({explorerPath, assetGraphData}) => {
   const [cursor, setCursor] = useQueryPersistedState<string | undefined>({queryKey: 'cursor'});
-  const [search, setSearch] = useQueryPersistedState<string | undefined>({queryKey: 'q'});
   const [view, _setView] = useAssetView();
 
-  useDocumentTitle(
-    prefixPath && prefixPath.length ? `Assets: ${prefixPath.join(' \u203A ')}` : 'Assets',
-  );
+  // useDocumentTitle(
+  //   prefixPath && prefixPath.length ? `Assets: ${prefixPath.join(' \u203A ')}` : 'Assets',
+  // );
 
   const assetsQuery = useQuery<AssetCatalogTableQuery>(ASSET_CATALOG_TABLE_QUERY, {
     notifyOnNetworkStatusChange: true,
-    skip: view === 'graph',
   });
 
   const refreshState = useQueryRefreshAtInterval(assetsQuery, FIFTEEN_SECONDS);
 
-  React.useEffect(() => {
-    if (view !== 'directory' && prefixPath.length) {
-      _setView('directory');
-    }
-  }, [view, _setView, prefixPath]);
+  // React.useEffect(() => {
+  //   if (view !== 'directory' && prefixPath.length) {
+  //     _setView('directory');
+  //   }
+  // }, [view, _setView, prefixPath]);
 
-  if (view === 'graph' && !prefixPath.length) {
-    return <Redirect to="/instance/asset-graph" />;
-  }
+  // if (view === 'graph' && !prefixPath.length) {
+  //   return <Redirect to="/instance/asset-graph" />;
+  // }
 
   return (
     <Wrapper>
@@ -68,62 +63,50 @@ export const AssetsCatalogTable: React.FC<{prefixPath?: string[]}> = ({prefixPat
           if (!assets.length) {
             return (
               <Box padding={{vertical: 64}}>
-                <AssetsEmptyState prefixPath={prefixPath} />
+                <AssetsEmptyState prefixPath={[explorerPath.opsQuery]} />
               </Box>
             );
           }
-          const searchSeparatorAgnostic = (search || '')
-            .replace(/(( ?> ?)|\.|\/)/g, '>')
-            .toLowerCase()
-            .trim();
+          const searchSeparatorAgnostic = explorerPath.opsQuery
+            .split(',')
+            .map((p) => p.replace(/\*+/g, '').trim())
+            .filter(Boolean);
 
           const filtered = assets.filter(
             (a) =>
-              !searchSeparatorAgnostic ||
-              tokenForAssetKey(a.key).toLowerCase().includes(searchSeparatorAgnostic),
+              assetGraphData?.nodes[a.id] ||
+              searchSeparatorAgnostic.length === 0 ||
+              searchSeparatorAgnostic.some((term) =>
+                tokenForAssetKey(a.key).toLowerCase().includes(term),
+              ),
           );
 
           const {displayPathForAsset, displayed, nextCursor, prevCursor} =
             view === 'flat'
-              ? buildFlatProps(filtered, prefixPath, cursor)
-              : buildNamespaceProps(filtered, prefixPath, cursor);
-
-          console.log(view);
-          const paginationProps: CursorPaginationProps = {
-            hasPrevCursor: !!prevCursor,
-            hasNextCursor: !!nextCursor,
-            popCursor: () => setCursor(prevCursor),
-            advanceCursor: () => setCursor(nextCursor),
-            reset: () => {
-              setCursor(undefined);
-            },
-          };
+              ? buildFlatProps(filtered, [], cursor)
+              : buildNamespaceProps(filtered, [], cursor);
 
           return (
             <>
               <StickyTableContainer $top={0}>
                 <AssetTable
                   assets={displayed}
-                  actionBarComponents={
-                    <>
-                      <AssetViewModeSwitch />
-                      <TextInput
-                        value={search || ''}
-                        style={{width: '30vw', minWidth: 150, maxWidth: 400}}
-                        placeholder="Search all asset_keys..."
-                        onChange={(e: React.ChangeEvent<any>) => setSearch(e.target.value)}
-                      />
-                      <QueryRefreshCountdown refreshState={refreshState} />
-                    </>
-                  }
-                  prefixPath={prefixPath || []}
+                  prefixPath={[]}
                   displayPathForAsset={displayPathForAsset}
                   maxDisplayCount={PAGE_SIZE}
                   requery={(_) => [{query: ASSET_CATALOG_TABLE_QUERY}]}
                 />
               </StickyTableContainer>
               <Box margin={{vertical: 20}}>
-                <CursorPaginationControls {...paginationProps} />
+                <CursorPaginationControls
+                  hasPrevCursor={!!prevCursor}
+                  hasNextCursor={!!nextCursor}
+                  popCursor={() => setCursor(prevCursor)}
+                  advanceCursor={() => setCursor(nextCursor)}
+                  reset={() => {
+                    setCursor(undefined);
+                  }}
+                />
               </Box>
             </>
           );

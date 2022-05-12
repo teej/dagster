@@ -21,13 +21,11 @@ type AssetKey = {path: string[]};
 
 export const AssetTable = ({
   assets,
-  actionBarComponents,
   prefixPath,
   displayPathForAsset,
   maxDisplayCount,
   requery,
 }: {
-  actionBarComponents: React.ReactNode;
   assets: Asset[];
   prefixPath: string[];
   displayPathForAsset: (asset: Asset) => string[];
@@ -59,7 +57,6 @@ export const AssetTable = ({
   return (
     <Box flex={{direction: 'column'}}>
       <Box flex={{alignItems: 'center', gap: 12}} padding={{vertical: 8, left: 24, right: 12}}>
-        {actionBarComponents}
         <div style={{flex: 1}} />
         <AssetBulkActions
           selected={Array.from(checkedAssets)}
