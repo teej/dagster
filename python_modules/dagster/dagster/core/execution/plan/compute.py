@@ -14,7 +14,10 @@ from dagster.core.definitions import (
     Output,
 )
 from dagster.core.definitions.asset_layer import AssetLayer
-from dagster.core.errors import DagsterExecutionStepExecutionError, DagsterInvariantViolationError
+from dagster.core.errors import (
+    DagsterExecutionStepExecutionError,
+    DagsterInvariantViolationError,
+)
 from dagster.core.events import DagsterEvent
 from dagster.core.execution.context.compute import SolidExecutionContext
 from dagster.core.execution.context.system import StepExecutionContext
@@ -180,7 +183,6 @@ def execute_core_compute(
     omitted_outputs = solid_output_names.difference(emitted_result_names)
     if omitted_outputs:
         step_context.log.info(
-            "Solid {solid} did not fire outputs {outputs}".format(
-                solid=str(step.solid_handle), outputs=repr(omitted_outputs)
-            )
+            f"{step_context.solid_def.node_type_str} {str(step.solid_handle)} did not fire outputs "
+            f"{repr(omitted_outputs)}"
         )
