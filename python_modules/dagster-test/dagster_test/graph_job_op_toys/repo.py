@@ -96,9 +96,9 @@ def long_asset_keys_repository():
     return [long_asset_keys_group]
 
 
-@repository
-def big_honkin_assets_repository():
-    return [big_honkin_asset_group]
+# @repository
+# def big_honkin_assets_repository():
+#     return [big_honkin_asset_group]
 
 
 @repository

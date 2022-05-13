@@ -62,7 +62,6 @@ export const AssetTable = ({
           selected={Array.from(checkedAssets)}
           clearSelection={() => onToggleAll(false)}
         />
-        <ReloadAllButton label="Reload definitions" />
       </Box>
       <Table>
         <thead>

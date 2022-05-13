@@ -24,8 +24,11 @@ export type AssetGraphLayout = {
   edges: AssetLayoutEdge[];
   nodes: {[id: string]: AssetLayout};
 
-  bundleEdges: AssetLayoutEdge[];
   bundles: {[id: string]: AssetLayout};
+  bundleEdges: AssetLayoutEdge[];
+  bundleMapping: {
+    [prefixId: string]: string[];
+  };
 };
 
 const opts: {margin: number; mini: boolean} = {
@@ -174,6 +177,7 @@ export const layoutAssetGraph = (graphData: GraphData): AssetGraphLayout => {
     edges,
     bundles,
     bundleEdges,
+    bundleMapping,
     width: maxWidth + opts.margin,
     height: maxHeight + opts.margin,
   };

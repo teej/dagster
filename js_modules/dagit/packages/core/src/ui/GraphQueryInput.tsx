@@ -11,6 +11,7 @@ import {
   Popover,
   TextInput,
   Tooltip,
+  IconName,
 } from '@dagster-io/ui';
 import isEqual from 'lodash/isEqual';
 import uniq from 'lodash/uniq';
@@ -24,10 +25,12 @@ import {GraphExplorerSolidHandleFragment_solid} from '../pipelines/types/GraphEx
 import {workspacePipelinePath} from '../workspace/workspacePath';
 
 interface GraphQueryInputProps {
-  intent?: Intent;
   items: GraphQueryItem[];
+  iconForItem?: (item: GraphQueryItem) => IconName;
   value: string;
   placeholder: string;
+
+  intent?: Intent;
   autoFocus?: boolean;
   presets?: {name: string; value: string}[];
   width?: string | number;
@@ -55,11 +58,6 @@ interface GraphQueryInputProps {
 interface ActiveSuggestionInfo {
   text: string;
   idx: number;
-}
-
-interface SuggestionItem {
-  name: string;
-  isGraph: boolean;
 }
 
 /** Generates placeholder text for the solid query box that includes a
@@ -118,17 +116,11 @@ const buildSuggestions = (
   items: GraphQueryItem[] | GraphExplorerSolidHandleFragment_solid[],
   suffix: string,
 ) => {
-  const available: SuggestionItem[] = items.map((item) => {
-    const solidItem = item as GraphExplorerSolidHandleFragment_solid;
-    const isGraph =
-      solidItem.definition && solidItem.definition.__typename === 'CompositeSolidDefinition';
-
-    return {name: item.name, isGraph};
-  });
+  const available = [...items];
 
   for (const item of available) {
     if (isDynamicStep(item.name)) {
-      available.push({name: dynamicKeyWithoutIndex(item.name), isGraph: item.isGraph});
+      available.push({...item, name: dynamicKeyWithoutIndex(item.name)});
     }
   }
 
@@ -173,7 +165,8 @@ export const GraphQueryInput = React.memo(
 
     const onConfirmSuggestion = (suggestion: string) => {
       const preceding = lastClause ? pendingValue.substr(0, lastClause.index) : '';
-      setPendingValue(preceding + prefix + `"${suggestion}"` + suffix);
+      const quote = suggestion.endsWith('/') ? '' : '"';
+      setPendingValue(preceding + prefix + `${quote}${suggestion}${quote}` + suffix);
     };
 
     React.useEffect(() => {
@@ -298,7 +291,11 @@ export const GraphQueryInput = React.memo(
               <Menu style={{width: props.width || '24vw'}}>
                 {suggestions.slice(0, 15).map((suggestion) => (
                   <MenuItem
-                    icon={suggestion.isGraph ? 'job' : 'op'}
+                    icon={
+                      props.iconForItem
+                        ? props.iconForItem(suggestion)
+                        : defaultIconForItem(suggestion)
+                    }
                     key={suggestion.name}
                     text={suggestion.name}
                     active={active ? active.text === suggestion.name : false}
@@ -327,6 +324,13 @@ export const GraphQueryInput = React.memo(
                 setPendingValue(e.target.value);
                 props.autoApplyChanges && props.onChange(e.target.value);
               }}
+              rightElement={
+                pendingValue ? (
+                  <div onClick={() => props.onChange('')} style={{padding: 4, marginRight: -4}}>
+                    <Icon name="cancel" color={Colors.Gray500} />
+                  </div>
+                ) : undefined
+              }
               onFocus={() => {
                 if (!flattenGraphsEnabled) {
                   // Defer focus to be manually managed
@@ -422,6 +426,12 @@ export const GraphQueryInput = React.memo(
     prevProps.value === nextProps.value &&
     isEqual(prevProps.presets, nextProps.presets),
 );
+
+const defaultIconForItem = (item: GraphQueryItem): IconName => {
+  const solidItem = item as GraphExplorerSolidHandleFragment_solid;
+  const isGraph = solidItem.definition?.__typename === 'CompositeSolidDefinition';
+  return isGraph ? 'job' : 'op';
+};
 
 const OpInfoWrap = styled.div`
   width: 350px;

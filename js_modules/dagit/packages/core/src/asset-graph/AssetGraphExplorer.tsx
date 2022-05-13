@@ -1,17 +1,16 @@
 import {
+  Body,
   Box,
   Checkbox,
-  MenuItem,
+  Colors,
+  Icon,
   Mono,
   NonIdealState,
   SplitPanelContainer,
-  Suggest,
 } from '@dagster-io/ui';
-import flatMap from 'lodash/flatMap';
 import isEqual from 'lodash/isEqual';
 import pickBy from 'lodash/pickBy';
 import uniq from 'lodash/uniq';
-import uniqBy from 'lodash/uniqBy';
 import without from 'lodash/without';
 import React from 'react';
 import {useHistory} from 'react-router-dom';
@@ -19,13 +18,7 @@ import styled from 'styled-components/macro';
 
 import {useFeatureFlags} from '../app/Flags';
 import {GraphQueryItem} from '../app/GraphQueryImpl';
-import {
-  FIFTEEN_SECONDS,
-  QueryRefreshCountdown,
-  QueryRefreshState,
-  useQueryRefreshAtInterval,
-} from '../app/QueryRefresh';
-import {LaunchAssetExecutionButton} from '../assets/LaunchAssetExecutionButton';
+import {FIFTEEN_SECONDS, QueryRefreshState, useQueryRefreshAtInterval} from '../app/QueryRefresh';
 import {AssetKey} from '../assets/types';
 import {SVGViewport} from '../graph/SVGViewport';
 import {useAssetLayout} from '../graph/asyncGraphLayout';
@@ -34,7 +27,6 @@ import {useDocumentTitle} from '../hooks/useDocumentTitle';
 import {
   GraphExplorerOptions,
   OptionsOverlay,
-  QueryOverlay,
   RightInfoPanel,
   RightInfoPanelContent,
 } from '../pipelines/GraphExplorer';
@@ -48,11 +40,10 @@ import {ExplorerPath, instanceAssetsExplorerPathToURL} from '../pipelines/Pipeli
 import {SidebarPipelineOrJobOverview} from '../pipelines/SidebarPipelineOrJobOverview';
 import {useDidLaunchEvent} from '../runs/RunUtils';
 import {PipelineSelector} from '../types/globalTypes';
-import {GraphQueryInput} from '../ui/GraphQueryInput';
 import {Loading} from '../ui/Loading';
 
 import {AssetConnectedEdges, AssetDisconnectedEdges} from './AssetEdges';
-import {AssetNode, AssetNodeMinimal} from './AssetNode';
+import {AssetNode, AssetNodeMinimal, NameMinimal} from './AssetNode';
 import {ForeignNode} from './ForeignNode';
 import {OmittedAssetsNotice} from './OmittedAssetsNotice';
 import {SidebarAssetInfo} from './SidebarAssetInfo';
@@ -64,13 +55,13 @@ import {
   isSourceAsset,
   tokenForAssetKey,
   displayNameForAssetKey,
-  identifyBundles,
 } from './Utils';
 import {AssetGraphLayout} from './layout';
 import {AssetGraphQuery_assetNodes} from './types/AssetGraphQuery';
 import {useAssetGraphData} from './useAssetGraphData';
 import {useFindJobForAsset} from './useFindJobForAsset';
 import {useLiveDataForAssetKeys} from './useLiveDataForAssetKeys';
+import {withMiddleTruncation} from '../app/Util';
 
 type AssetNode = AssetGraphQuery_assetNodes;
 
@@ -143,13 +134,40 @@ export const AssetGraphExplorer: React.FC<Props> = (props) => {
   );
 };
 
-const AssetGraphExplorerWithData: React.FC<
+export function selectionFromExplorerPath(
+  explorerPath: ExplorerPath,
+  assetGraphData: GraphData | null,
+) {
+  if (!assetGraphData) {
+    return {
+      lastSelectedNode: null,
+      launchGraphNodes: [] as GraphNode[],
+      selectedGraphNodes: [] as GraphNode[],
+    };
+  }
+
+  const selectedAssetValues = explorerPath.opNames[explorerPath.opNames.length - 1].split(',');
+  const selectedGraphNodes = Object.values(assetGraphData.nodes).filter((node) =>
+    selectedAssetValues.some((v) => {
+      const token = tokenForAssetKey(node.definition.assetKey);
+      return v === token || (v.length && token.startsWith(v)); // NOTE HACK DON"T MERGE
+    }),
+  );
+  const lastSelectedNode = selectedGraphNodes[selectedGraphNodes.length - 1];
+  const launchGraphNodes = selectedGraphNodes.length
+    ? selectedGraphNodes
+    : Object.values(assetGraphData.nodes).filter((a) => !isSourceAsset(a.definition));
+
+  return {lastSelectedNode, launchGraphNodes, selectedGraphNodes};
+}
+
+export const AssetGraphExplorerWithData: React.FC<
   {
     allAssetKeys: AssetKey[];
     assetGraphData: GraphData;
     graphQueryItems: GraphQueryItem[];
     liveDataByNode: LiveData;
-    liveDataRefreshState: QueryRefreshState;
+    liveDataRefreshState?: QueryRefreshState;
     applyingEmptyDefault: boolean;
   } & Props
 > = (props) => {
@@ -158,7 +176,6 @@ const AssetGraphExplorerWithData: React.FC<
     setOptions,
     explorerPath,
     onChangeExplorerPath,
-    liveDataRefreshState,
     liveDataByNode,
     assetGraphData,
     graphQueryItems,
@@ -172,14 +189,10 @@ const AssetGraphExplorerWithData: React.FC<
 
   const [highlighted, setHighlighted] = React.useState<string | null>(null);
 
-  const selectedAssetValues = explorerPath.opNames[explorerPath.opNames.length - 1].split(',');
-  const selectedGraphNodes = Object.values(assetGraphData.nodes).filter((node) =>
-    selectedAssetValues.includes(tokenForAssetKey(node.definition.assetKey)),
+  const {selectedGraphNodes, lastSelectedNode} = selectionFromExplorerPath(
+    explorerPath,
+    assetGraphData,
   );
-  const lastSelectedNode = selectedGraphNodes[selectedGraphNodes.length - 1];
-  const launchGraphNodes = selectedGraphNodes.length
-    ? selectedGraphNodes
-    : Object.values(assetGraphData.nodes).filter((a) => !isSourceAsset(a.definition));
 
   const isGlobalGraph = !pipelineSelector;
 
@@ -305,7 +318,7 @@ const AssetGraphExplorerWithData: React.FC<
     );
 
   const onArrowKeyDown = (e: React.KeyboardEvent<any>, dir: string) => {
-    if (!layout) {
+    if (!layout || !lastSelectedNode) {
       return;
     }
     const hasDefinition = (node: {id: string}) => !!assetGraphData.nodes[node.id]?.definition;
@@ -397,13 +410,39 @@ const AssetGraphExplorerWithData: React.FC<
                             }}
                           >
                             <AssetNodeMinimal
-                              color="rgba(248, 223, 196, 0.4)"
-                              definition={{assetKey: {path}}}
-                              fontSize={18 / _scale}
+                              style={{
+                                border: `${2 / _scale}px solid ${Colors.Gray300}`,
+                                background: Colors.White,
+                              }}
                               selected={selectedGraphNodes.some((g) =>
                                 hasPathPrefix(g.assetKey.path, path),
                               )}
-                            />
+                            >
+                              <NameMinimal
+                                style={{
+                                  fontSize: 18 / _scale,
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  alignItems: 'center',
+                                }}
+                              >
+                                <div
+                                  style={{display: 'flex', gap: 3 / _scale, alignItems: 'center'}}
+                                >
+                                  <Icon
+                                    name="folder"
+                                    size={Math.round(16 / _scale) as any}
+                                    style={{marginTop: 4}}
+                                  />
+                                  {withMiddleTruncation(displayNameForAssetKey({path}), {
+                                    maxLength: 17,
+                                  })}
+                                </div>
+                                <Body style={{fontSize: 10 / _scale, color: Colors.Gray500}}>
+                                  {layout.bundleMapping[id].length} items
+                                </Body>
+                              </NameMinimal>
+                            </AssetNodeMinimal>
                           </foreignObject>
                         );
                       }
@@ -423,8 +462,11 @@ const AssetGraphExplorerWithData: React.FC<
                                   ? (_scale - EXPERIMENTAL_MINI_SCALE) / 0.2
                                   : 0,
                               fontWeight: 600,
+                              display: 'flex',
+                              gap: 6,
                             }}
                           >
+                            <Icon name="folder" size={20} />
                             {displayNameForAssetKey({path: JSON.parse(id)})}
                           </Mono>
                           <div
@@ -433,8 +475,8 @@ const AssetGraphExplorerWithData: React.FC<
                               top: 24,
                               position: 'absolute',
                               borderRadius: 10,
-                              border: `${3 / _scale}px dashed rgba(0,0,0,0.4)`,
-                              background: `rgba(248, 223, 196, ${
+                              border: `${3 / _scale}px dashed ${Colors.Gray300}`,
+                              background: `rgba(223, 223, 223, ${
                                 0.4 - Math.max(0, _scale - EXPERIMENTAL_MINI_SCALE) * 0.3
                               })`,
                             }}
@@ -483,10 +525,16 @@ const AssetGraphExplorerWithData: React.FC<
                           <ForeignNode assetKey={{path}} />
                         ) : experiments && _scale < EXPERIMENTAL_MINI_SCALE ? (
                           <AssetNodeMinimal
-                            definition={graphNode.definition}
+                            style={{background: Colors.White}}
                             selected={selectedGraphNodes.includes(graphNode)}
-                            fontSize={28}
-                          />
+                          >
+                            <NameMinimal style={{fontSize: 28}}>
+                              {withMiddleTruncation(
+                                displayNameForAssetKey(graphNode.definition.assetKey),
+                                {maxLength: 17},
+                              )}
+                            </NameMinimal>
+                          </AssetNodeMinimal>
                         ) : (
                           <AssetNode
                             definition={graphNode.definition}
@@ -531,27 +579,6 @@ const AssetGraphExplorerWithData: React.FC<
             flex={{direction: 'column', alignItems: 'flex-end', gap: 8}}
             style={{position: 'absolute', right: 12, top: 12}}
           >
-            <Box flex={{alignItems: 'center', gap: 12}}>
-              <QueryRefreshCountdown
-                refreshState={liveDataRefreshState}
-                dataDescription="materializations"
-              />
-
-              <LaunchAssetExecutionButton
-                title={titleForLaunch(selectedGraphNodes, liveDataByNode)}
-                preferredJobName={explorerPath.pipelineName}
-                assets={launchGraphNodes.map((n) => n.definition)}
-                upstreamAssetKeys={uniqBy(
-                  flatMap(launchGraphNodes.map((n) => n.definition.dependencyKeys)),
-                  (key) => JSON.stringify(key),
-                ).filter(
-                  (key) =>
-                    !launchGraphNodes.some(
-                      (n) => JSON.stringify(n.assetKey) === JSON.stringify(key),
-                    ),
-                )}
-              />
-            </Box>
             {!props.pipelineSelector && <OmittedAssetsNotice assetKeys={props.allAssetKeys} />}
           </Box>
         </>
@@ -644,17 +671,6 @@ const opsInRange = (
     }
   }
   return uniq(ledToTarget);
-};
-
-const titleForLaunch = (nodes: GraphNode[], liveDataByNode: LiveData) => {
-  const isRematerializeForAll = (nodes.length
-    ? nodes.map((n) => liveDataByNode[n.id])
-    : Object.values(liveDataByNode)
-  ).every((e) => !!e?.lastMaterialization);
-
-  return `${isRematerializeForAll ? 'Rematerialize' : 'Materialize'} ${
-    nodes.length === 0 ? `All` : nodes.length === 1 ? `Selected` : `Selected (${nodes.length})`
-  }`;
 };
 
 // This is similar to react-router's "<Redirect />" in that it immediately performs

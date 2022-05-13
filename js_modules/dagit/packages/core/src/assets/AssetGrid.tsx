@@ -12,28 +12,30 @@ import flatMap from 'lodash/flatMap';
 import uniqBy from 'lodash/uniqBy';
 import * as React from 'react';
 import {Link} from 'react-router-dom';
-
-import {
-  displayNameForAssetKey,
-  GraphData,
-  identifyBundles,
-  tokenForAssetKey,
-} from '../asset-graph/Utils';
-import {useViewport} from '../gantt/useViewport';
-import {instanceAssetsExplorerPathToURL} from '../pipelines/PipelinePathUtils';
-
 import styled from 'styled-components/macro';
+
 import {
   AssetLatestRunWithNotices,
   AssetNode,
   AssetNodeBox,
   AssetRunLink,
 } from '../asset-graph/AssetNode';
-import {useLiveDataForAssetKeys} from '../asset-graph/useLiveDataForAssetKeys';
 import {SidebarAssetInfo} from '../asset-graph/SidebarAssetInfo';
+import {
+  displayNameForAssetKey,
+  GraphData,
+  GraphNode,
+  identifyBundles,
+  LiveData,
+  tokenForAssetKey,
+} from '../asset-graph/Utils';
+import {useLiveDataForAssetKeys} from '../asset-graph/useLiveDataForAssetKeys';
+import {useViewport} from '../gantt/useViewport';
 import {RightInfoPanel, RightInfoPanelContent} from '../pipelines/GraphExplorer';
-import {AssetKey} from './types';
+import {instanceAssetsExplorerPathToURL} from '../pipelines/PipelinePathUtils';
 import {TimestampDisplay} from '../schedules/TimestampDisplay';
+
+import {AssetKey} from './types';
 
 const PADDING = 30;
 
@@ -43,7 +45,7 @@ interface Box {
   layout: {top: number; left: number; width: number; height: number};
 }
 
-function keyForAssetId(id: string) {
+export function keyForAssetId(id: string) {
   return {path: JSON.parse(id)};
 }
 
@@ -78,22 +80,24 @@ function processGraphData(assetGraphData: GraphData | null) {
 
 export const AssetGrid: React.FC<{
   assetGraphData: GraphData | null;
-}> = ({assetGraphData}) => {
-  const [selected, setSelected] = React.useState<string | null>(null);
+  liveDataByNode: LiveData;
+  selected: GraphNode[];
+  onSelect: (token: string | null, e: React.MouseEvent) => void;
+}> = ({selected, onSelect, assetGraphData, liveDataByNode}) => {
   const [highlighted, setHighlighted] = React.useState<string | null>(null);
   const {containerProps, viewport} = useViewport();
 
   const {bundles, unbundledAssetIds, renderedEdges} = processGraphData(assetGraphData);
   const itemsPerRow = Math.round(((window.innerWidth - 40) * 0.7) / 260);
-  const itemWidth = (viewport.width - 40 - (itemsPerRow - 1) * PADDING) / itemsPerRow;
+  const itemWidth = (viewport.width - (itemsPerRow - 1) * PADDING) / itemsPerRow;
 
-  const {liveDataByNode} = useLiveDataForAssetKeys(
-    null,
-    assetGraphData,
-    unbundledAssetIds.map(keyForAssetId),
-  );
+  const selectedIds = selected.map((s) => s.id);
+  const lastSelectedId =
+    Object.keys(bundles).find((bundleId) =>
+      bundles[bundleId].every((id) => selectedIds.includes(id)),
+    ) || selectedIds[selectedIds.length - 1];
 
-  const edgeFocused = highlighted || selected;
+  const edgeFocused = highlighted || selectedIds[selectedIds.length - 1];
   const hasHighlightedEdgeIn = new Set<string>();
   const hasHighlightedEdgeOut = new Set<string>();
   if (edgeFocused) {
@@ -105,14 +109,14 @@ export const AssetGrid: React.FC<{
     }
   }
 
-  const renderGridItem = (id: string, children: React.ReactNode) => (
+  const renderGridItem = (id: string, selected: boolean, children: React.ReactNode) => (
     <FolderContainer
       key={id}
-      $selected={selected === id}
+      $selected={selected}
       $faded={
         !!edgeFocused &&
         id !== highlighted &&
-        id !== selected &&
+        !selected &&
         !hasHighlightedEdgeIn.has(id) &&
         !hasHighlightedEdgeOut.has(id)
       }
@@ -121,7 +125,7 @@ export const AssetGrid: React.FC<{
       onMouseLeave={() => setHighlighted(null)}
       onClick={(e) => {
         e.stopPropagation();
-        setSelected(id);
+        onSelect(tokenForAssetKey(keyForAssetId(id)), e);
       }}
     >
       {hasHighlightedEdgeIn.has(id) && <div className="edge edge-in" />}
@@ -139,7 +143,7 @@ export const AssetGrid: React.FC<{
         <div
           {...containerProps}
           style={{overflowY: 'scroll', position: 'relative', width: '100%'}}
-          onClick={() => setSelected(null)}
+          onClick={(e) => onSelect(null, e)}
         >
           <Box
             flex={{justifyContent: 'space-between', alignItems: 'center'}}
@@ -153,7 +157,11 @@ export const AssetGrid: React.FC<{
             {Object.keys(bundles)
               .sort()
               .map((bundleId) =>
-                renderGridItem(bundleId, <Folder id={bundleId} contentIds={bundles[bundleId]} />),
+                renderGridItem(
+                  bundleId,
+                  bundles[bundleId].every((id) => selectedIds.includes(id)),
+                  <Folder id={bundleId} contentIds={bundles[bundleId]} />,
+                ),
               )}
           </Box>
 
@@ -173,11 +181,12 @@ export const AssetGrid: React.FC<{
                 .map((assetId) =>
                   renderGridItem(
                     assetId,
+                    selectedIds.includes(assetId),
                     <AssetNode
                       width={itemWidth}
                       definition={assetGraphData.nodes[assetId].definition}
                       liveData={liveDataByNode[assetId]}
-                      selected={selected === assetId}
+                      selected={selectedIds.includes(assetId)}
                       padded={false}
                     />,
                   ),
@@ -189,19 +198,19 @@ export const AssetGrid: React.FC<{
         </div>
       }
       second={
-        selected && assetGraphData ? (
+        selectedIds.length > 0 && assetGraphData ? (
           <RightInfoPanel>
             <RightInfoPanelContent>
-              {assetGraphData?.nodes[selected] ? (
+              {assetGraphData?.nodes[lastSelectedId] ? (
                 <SidebarAssetInfo
-                  assetKey={keyForAssetId(selected)}
-                  liveData={liveDataByNode[selected]}
+                  assetKey={keyForAssetId(lastSelectedId)}
+                  liveData={liveDataByNode[lastSelectedId]}
                 />
               ) : (
                 <SidebarAssetBundleInfo
-                  bundleKey={keyForAssetId(selected)}
+                  bundleKey={keyForAssetId(lastSelectedId)}
                   assetGraphData={assetGraphData}
-                  assetIds={bundles[selected]}
+                  assetIds={bundles[lastSelectedId]}
                 />
               )}
             </RightInfoPanelContent>
@@ -228,6 +237,8 @@ const Folder: React.FC<{id: string; contentIds: string[]}> = ({id, contentIds}) 
     >
       <div> {contentIds.length} items</div>
       <Link
+        className="on-folderbox-hover"
+        onClick={(e) => e.stopPropagation()}
         to={instanceAssetsExplorerPathToURL({
           opsQuery: `${tokenForAssetKey(keyForAssetId(id))}/`,
           opNames: [],
@@ -235,7 +246,7 @@ const Folder: React.FC<{id: string; contentIds: string[]}> = ({id, contentIds}) 
       >
         <Box flex={{gap: 4}}>
           <Icon name="schema" size={16} color={Colors.Link} />
-          View Graph
+          Jump to Graph
         </Box>
       </Link>
     </Box>
@@ -296,6 +307,13 @@ const FolderBox = styled.div`
   position: relative;
   &:hover {
     box-shadow: rgba(0, 0, 0, 0.12) 0px 2px 12px 0px;
+    .on-folderbox-hover {
+      opacity: 1;
+    }
+  }
+  .on-folderbox-hover {
+    opacity: 0;
+    transition: opacity 250ms linear;
   }
 `;
 

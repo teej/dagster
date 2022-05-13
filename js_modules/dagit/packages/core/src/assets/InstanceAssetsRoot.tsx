@@ -1,11 +1,25 @@
 import {Box, Colors, Heading, MenuItem, PageHeader, Spinner, Suggest} from '@dagster-io/ui';
+import flatMap from 'lodash/flatMap';
+import uniq from 'lodash/uniq';
+import uniqBy from 'lodash/uniqBy';
+import without from 'lodash/without';
 import * as React from 'react';
 import {useParams} from 'react-router';
 import {useHistory} from 'react-router-dom';
+import {GraphQueryItem} from '../app/GraphQueryImpl';
+import {
+  useQueryRefreshAtInterval,
+  FIFTEEN_SECONDS,
+  QueryRefreshCountdown,
+} from '../app/QueryRefresh';
 
-import {AssetGraphExplorer} from '../asset-graph/AssetGraphExplorer';
+import {
+  AssetGraphExplorerWithData,
+  selectionFromExplorerPath,
+} from '../asset-graph/AssetGraphExplorer';
 import {useAssetGraphData} from '../asset-graph/useAssetGraphData';
-import {displayNameForAssetKey, identifyBundles} from '../asset-graph/Utils';
+import {useLiveDataForAssetKeys} from '../asset-graph/useLiveDataForAssetKeys';
+import {displayNameForAssetKey, GraphNode, identifyBundles, LiveData} from '../asset-graph/Utils';
 import {
   ExplorerPath,
   instanceAssetsExplorerPathFromString,
@@ -13,10 +27,11 @@ import {
 } from '../pipelines/PipelinePathUtils';
 import {GraphQueryInput} from '../ui/GraphQueryInput';
 import {ReloadAllButton} from '../workspace/ReloadAllButton';
-import {AssetGrid} from './AssetGrid';
+import {AssetGrid, keyForAssetId} from './AssetGrid';
 import {AssetsCatalogTable} from './AssetsCatalogTable';
 
 import {AssetViewModeSwitch} from './AssetViewModeSwitch';
+import {LaunchAssetExecutionButton} from './LaunchAssetExecutionButton';
 import {AssetViewType, useAssetView} from './useAssetView';
 
 function pathForView(view: AssetViewType) {
@@ -54,16 +69,55 @@ export const InstanceAssetsRoot: React.FC = () => {
     );
   };
 
-  const {graphQueryItems, assetGraphData, allAssetKeys} = useAssetGraphData(
+  const {assetGraphData, ...rest} = useAssetGraphData(
     null,
     explorerPath.opsQuery || (view === 'graph' ? '' : '*'),
   );
 
-  const allBundleNames = React.useMemo(() => {
-    return allAssetKeys
-      ? Object.keys(identifyBundles(allAssetKeys.map((a) => JSON.stringify(a.path))))
+  const {allBundleNames, graphQueryItems} = React.useMemo(() => {
+    const allBundleNames = rest.allAssetKeys
+      ? Object.keys(identifyBundles(rest.allAssetKeys.map((a) => JSON.stringify(a.path))))
       : [];
-  }, [allAssetKeys]);
+    const graphQueryItems: GraphQueryItem[] = [
+      ...allBundleNames.map((b) => ({
+        name: `${displayNameForAssetKey(keyForAssetId(b))}/`,
+        inputs: [],
+        outputs: [],
+      })),
+      ...rest.graphQueryItems,
+    ];
+
+    return {allBundleNames, graphQueryItems};
+  }, [rest.allAssetKeys, rest.graphQueryItems]);
+
+  const {liveResult, liveDataByNode} = useLiveDataForAssetKeys(
+    null,
+    assetGraphData,
+    rest.graphAssetKeys,
+  );
+
+  const liveDataRefreshState = useQueryRefreshAtInterval(liveResult, FIFTEEN_SECONDS);
+
+  const selection = selectionFromExplorerPath(explorerPath, assetGraphData);
+  const onSelect = (token: string | null, e: React.MouseEvent) => {
+    if (!token) {
+      onChangeExplorerPath({...explorerPath, opNames: ['']}, 'replace');
+      return;
+    }
+
+    let nextOpNames = [token];
+
+    if (token && e.metaKey) {
+      const existing = explorerPath.opNames[0].split(',');
+      nextOpNames = [
+        (existing.includes(token) ? without(existing, token) : uniq([...existing, token])).join(
+          ',',
+        ),
+      ];
+    }
+
+    onChangeExplorerPath({...explorerPath, opNames: nextOpNames}, 'replace');
+  };
 
   return (
     <Box
@@ -84,6 +138,7 @@ export const InstanceAssetsRoot: React.FC = () => {
 
         <GraphQueryInput
           items={graphQueryItems}
+          iconForItem={(item) => (item.name.endsWith('/') ? 'folder' : 'asset')}
           value={explorerPath.opsQuery}
           placeholder="Type an asset subset…"
           onChange={(opsQuery) => onChangeExplorerPath({...explorerPath, opsQuery}, 'replace')}
@@ -115,20 +170,65 @@ export const InstanceAssetsRoot: React.FC = () => {
             }}
           />
         )}
+        <div style={{flex: 1}} />
+
+        <Box flex={{alignItems: 'center', gap: 12}}>
+          <QueryRefreshCountdown
+            refreshState={liveDataRefreshState}
+            dataDescription="materializations"
+          />
+
+          <LaunchAssetExecutionButton
+            title={titleForLaunch(selection.selectedGraphNodes, liveDataByNode)}
+            preferredJobName={explorerPath.pipelineName}
+            assets={selection.launchGraphNodes.map((n) => n.definition)}
+            upstreamAssetKeys={uniqBy(
+              flatMap(selection.launchGraphNodes.map((n) => n.definition.dependencyKeys)),
+              (key) => JSON.stringify(key),
+            ).filter(
+              (key) =>
+                !selection.launchGraphNodes.some(
+                  (n) => JSON.stringify(n.assetKey) === JSON.stringify(key),
+                ),
+            )}
+          />
+        </Box>
       </Box>
       {!assetGraphData ? (
         <Spinner purpose="page" />
       ) : view === 'graph' ? (
-        <AssetGraphExplorer
+        <AssetGraphExplorerWithData
           options={{preferAssetRendering: true, explodeComposites: true}}
           explorerPath={explorerPath}
           onChangeExplorerPath={onChangeExplorerPath}
+          liveDataByNode={liveDataByNode}
+          assetGraphData={assetGraphData}
+          allAssetKeys={rest.allAssetKeys || []}
+          graphQueryItems={rest.graphQueryItems}
+          liveDataRefreshState={liveDataRefreshState}
+          applyingEmptyDefault={rest.applyingEmptyDefault}
         />
       ) : view === 'grid' ? (
-        <AssetGrid assetGraphData={assetGraphData} />
+        <AssetGrid
+          selected={selection.selectedGraphNodes}
+          onSelect={onSelect}
+          assetGraphData={assetGraphData}
+          liveDataByNode={liveDataByNode}
+        />
       ) : (
         <AssetsCatalogTable assetGraphData={assetGraphData} explorerPath={explorerPath} />
       )}
     </Box>
   );
+};
+
+const titleForLaunch = (nodes: GraphNode[], liveDataByNode: LiveData) => {
+  const isRematerializeForAll = (nodes.length
+    ? nodes.map((n) => liveDataByNode[n.id])
+    : Object.values(liveDataByNode)
+  ).every((e) => !!e?.lastMaterialization);
+
+  return `${isRematerializeForAll ? 'Rematerialize' : 'Materialize'} ${
+    nodes.length === 0 ? `All` : nodes.length === 1 ? `Selected` : `Selected (${nodes.length})`
+  }`;
 };

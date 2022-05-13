@@ -7,7 +7,7 @@ def upstream_asset():
     return 5
 
 
-upstream_asset_group = AssetGroup([upstream_asset])
+upstream_asset_group = AssetGroup([upstream_asset]).prefixed("streamed")
 
 source_assets = [SourceAsset(AssetKey("upstream_asset"))]
 
@@ -22,5 +22,5 @@ def downstream_asset2(upstream_asset):
     assert upstream_asset
 
 
-downstream_asset_group1 = AssetGroup([downstream_asset1], source_assets)
-downstream_asset_group2 = AssetGroup([downstream_asset2], source_assets)
+downstream_asset_group1 = AssetGroup([downstream_asset1], source_assets).prefixed("streamed")
+downstream_asset_group2 = AssetGroup([downstream_asset2], source_assets).prefixed("streamed")

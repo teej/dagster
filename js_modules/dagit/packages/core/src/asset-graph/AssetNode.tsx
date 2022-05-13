@@ -1,7 +1,7 @@
 import {gql} from '@apollo/client';
 import {Colors, Icon, Spinner, Tooltip, FontFamily, Box, CaptionMono} from '@dagster-io/ui';
 import isEqual from 'lodash/isEqual';
-import React from 'react';
+import React, {CSSProperties} from 'react';
 import {Link} from 'react-router-dom';
 import styled from 'styled-components/macro';
 
@@ -46,7 +46,7 @@ export const AssetNode: React.FC<{
 
   return (
     <AssetNodeContainer $selected={selected} $padded={padded}>
-      <AssetNodeBox>
+      <AssetNodeBox $selected={selected}>
         <Name>
           <span style={{marginTop: 1}}>
             <Icon name="asset" />
@@ -173,13 +173,8 @@ export const AssetLatestRunWithNotices: React.FC<{
 };
 export const AssetNodeMinimal: React.FC<{
   selected: boolean;
-  definition: {assetKey: AssetKey};
-  fontSize: number;
-  color?: string;
-}> = ({selected, definition, fontSize, color}) => {
-  const displayName = withMiddleTruncation(displayNameForAssetKey(definition.assetKey), {
-    maxLength: 17,
-  });
+  style?: CSSProperties;
+}> = ({selected, style, children}) => {
   return (
     <AssetNodeContainer
       $padded={true}
@@ -187,15 +182,16 @@ export const AssetNodeMinimal: React.FC<{
       style={{position: 'absolute', borderRadius: 12}}
     >
       <AssetNodeBox
+        $selected={selected}
         style={{
           border: `4px solid ${Colors.Blue200}`,
           borderRadius: 10,
           position: 'absolute',
           inset: 4,
-          background: color,
+          ...style,
         }}
       >
-        <NameMinimal style={{fontSize}}>{displayName}</NameMinimal>
+        {children}
       </AssetNodeBox>
     </AssetNodeContainer>
   );
@@ -262,7 +258,6 @@ const BoxColors = {
 };
 
 export const AssetNodeContainer = styled.div<{$selected: boolean; $padded: boolean}>`
-  outline: ${(p) => (p.$selected ? `2px dashed ${NodeHighlightColors.Border}` : 'none')};
   border-radius: 6px;
   outline-offset: -1px;
   background: ${(p) => (p.$selected ? NodeHighlightColors.Background : 'white')};
@@ -278,8 +273,8 @@ export const AssetNodeContainer = styled.div<{$selected: boolean; $padded: boole
   margin-bottom: 2px;`}
 `;
 
-export const AssetNodeBox = styled.div`
-  border: 2px solid ${Colors.Blue200};
+export const AssetNodeBox = styled.div<{$selected: boolean}>`
+  border: 2px solid ${(p) => (p.$selected ? Colors.Blue500 : Colors.Blue200)};
   background: ${BoxColors.Stats};
   border-radius: 5px;
   position: relative;
@@ -298,16 +293,6 @@ const Name = styled.div`
   border-top-right-radius: 5px;
   font-weight: 600;
   gap: 4px;
-`;
-
-const NameMinimal = styled(Name)`
-  font-weight: 600;
-  white-space: nowrap;
-  position: absolute;
-  background: none;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
 `;
 
 const Description = styled.div`
@@ -348,4 +333,14 @@ const UpstreamNotice = styled.div`
   padding: 2.5px 5px;
   margin-right: -6px;
   border-top-right-radius: 3px;
+`;
+
+export const NameMinimal = styled(Name)`
+  font-weight: 600;
+  white-space: nowrap;
+  position: absolute;
+  background: none;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
 `;
