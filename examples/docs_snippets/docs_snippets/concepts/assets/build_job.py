@@ -1,6 +1,6 @@
 # pylint: disable=redefined-outer-name
 # start_marker
-from dagster import AssetGroup, asset
+from dagster import asset, build_assets_job
 
 
 @asset
@@ -9,24 +9,9 @@ def upstream():
 
 
 @asset
-def downstream_1(upstream):
+def downstream(upstream):
     return upstream + [4]
 
 
-@asset
-def downstream_2(upstream):
-    return len(upstream)
-
-
-asset_group = AssetGroup([upstream, downstream_1, downstream_2])
-
-all_assets = asset_group.build_job(name="my_asset_job")
-
-downstream_assets = asset_group.build_job(
-    name="my_asset_job", selection=["upstream", "downstream_1"]
-)
-
-upstream_and_downstream_1 = asset_group.build_job(
-    name="my_asset_job", selection="*downstream_1"
-)
+all_assets = build_assets_job([upstream, downstream])
 # end_marker

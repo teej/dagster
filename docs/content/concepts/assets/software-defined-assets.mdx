@@ -12,8 +12,7 @@ A software-defined asset is a description of how to compute the contents of a pa
 | Name                                  | Description                                                                                                                                                                                                                                           |
 | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | <PyObject object="asset" decorator /> | A decorator used to define assets.                                                                                                                                                                                                                    |
-| <PyObject object="AssetGroup" />      | A group of software-defined assets.                                                                                                                                                                                                                   |
-| <PyObject object="SourceAsset" />     | A class that describes an asset, but doesn't define how to compute it. Within an <PyObject object="AssetGroup" />, <PyObject object="SourceAsset" />s are used to represent assets that other assets depend on, but can't be materialized themselves. |
+| <PyObject object="SourceAsset" />     | A class that describes an asset, but doesn't define how to compute it. <PyObject object="SourceAsset" />s are used to represent assets that other assets depend on, but can't be materialized themselves. |
 
 ## Overview
 
@@ -32,6 +31,12 @@ A crucial distinction between software-defined assets and [ops](/concepts/ops-jo
 A single software-defined asset might be represented in multiple storage environments - e.g. it might have a "production" version and a "staging" version.
 
 ## Defining assets
+
+Once you've defined a set of assets, you can:
+
+- [View them in Dagit](#viewing-assets-in-dagit).
+- [Materialize an ad-hoc set of them in Dagit](#materializing-assets-in-dagit).
+- [Build a job](#building-jobs-that-materialize-assets), which materializes a fixed selection of the assets, and can be put on a schedule or sensor.
 
 ### A basic software-defined asset
 
@@ -65,52 +70,15 @@ def downstream_asset(upstream_asset):
 
 The [explicit dependencies](#explicit-dependencies) example covers an alternative way to specify asset dependencies without needing to match argument names to upstream asset names.
 
-## Combining assets in groups
-
-To materialize assets or load them in Dagit, you first need to combine them into an <PyObject object="AssetGroup" />, which is a set of assets with no unsatisfied dependencies. For example:
-
-```python file=/concepts/assets/asset_group.py startafter=start_marker endbefore=end_marker
-from dagster import AssetGroup, asset
-
-
-@asset
-def upstream_asset():
-    return [1, 2, 3]
-
-
-@asset
-def downstream_asset(upstream_asset):
-    return upstream_asset + [4]
-
-
-asset_group = AssetGroup([upstream_asset, downstream_asset])
-```
-
-To save you from needing to add each asset individually to the group, Dagster provides the <PyObject object="AssetGroup" method="from_package_name" /> method for building <PyObject object="AssetGroup" />s out of all the assets within all Python modules underneath a Python package:
-
-```python file=/concepts/assets/from_package_name.py
-from dagster import AssetGroup
-
-asset_group = AssetGroup.from_package_name(
-    "docs_snippets.concepts.assets.package_with_assets"
-)
-```
-
-Once assets are bundled into an asset group, you can:
-
-- [View them in Dagit](#viewing-assets-in-dagit).
-- [Materialize an ad-hoc set of them in Dagit](#materializing-assets-in-dagit).
-- [Build a job](#building-jobs-that-materialize-assets), which materializes a fixed selection of the assets in the group, and can be put on a schedule or sensor.
-
 ## Viewing and materializing assets in Dagit
 
 ### Loading assets into Dagit
 
-To view and materialize assets in Dagit, you can point it at a module that contains an <PyObject object="AssetGroup" />. E.g.
+To view and materialize assets in Dagit, you can point it at a module that contains asset definitions or lists of asset definitions as module-level attributes:
 
-    dagit -m module_with_asset_group
+    dagit -m module_with_assets
 
-If you want Dagit to contain both an asset group and a set of [jobs](/concepts/ops-jobs-graphs/jobs-graphs) that target the assets, you can place the <PyObject object="AssetGroup" /> and jobs together inside a [repository](/concepts/repositories-workspaces/repositories).
+If you want Dagit to contain both assets and [jobs](/concepts/ops-jobs-graphs/jobs-graphs) that target the assets, you can place the assets and jobs together inside a [repository](/concepts/repositories-workspaces/repositories).
 
 ### Viewing assets in Dagit
 
@@ -144,12 +112,12 @@ There are a couple ways in Dagit to launch a run that materializes assets:
 
 ## Source assets - representing assets are generated somewhere else
 
-It's common for software-defined assets to depend on assets that are generated somewhere else. For example, your data warehouse might contain a set of tables that another team is responsible for ingesting, but that your assets are derived from. To allow the assets in your <PyObject object="AssetGroup" /> to depend on them, you can include <PyObject object="SourceAsset" />s that represent them.
+It's common for software-defined assets to depend on assets that are generated somewhere else. For example, your data warehouse might contain a set of tables that another team is responsible for ingesting, but that your assets are derived from. To allow assets to depend on them, you can define <PyObject object="SourceAsset" />s that represent them.
 
 For example:
 
 ```python file=/concepts/assets/source_asset.py startafter=start_marker endbefore=end_marker
-from dagster import AssetGroup, AssetKey, SourceAsset, asset
+from dagster import AssetKey, SourceAsset, asset
 
 my_source_asset = SourceAsset(key=AssetKey("my_source_asset"))
 
@@ -157,14 +125,11 @@ my_source_asset = SourceAsset(key=AssetKey("my_source_asset"))
 @asset
 def my_derived_asset(my_source_asset):
     return my_source_asset + [4]
-
-
-asset_group = AssetGroup(assets=[my_derived_asset], source_assets=[my_source_asset])
 ```
 
 In any situation where you might use a source asset, you could also have the code inside the asset's op load the data. However, using source assets has a few advantages:
 
-- It allows Dagit to show asset lineage that includes the source assets. If a different <PyObject object="AssetGroup" /> in the same [workspace](/concepts/repositories-workspaces/workspaces) contains an asset definition with the same asset key as a <PyObject object="SourceAsset" />, Dagit can represent the asset lineage across those groups.
+- It allows Dagit to show asset lineage that includes the source assets. If a different asset definition in a different repository in the same [workspace](/concepts/repositories-workspaces/workspaces) has the same asset key as a <PyObject object="SourceAsset" />, Dagit can represent the asset lineage across those repositories.
 - If you've already factored your data-loading code into an <PyObject object="IOManager" />, Dagster can use it to load the contents of your source asset.
 - It allows you to write your asset dependencies in the same way, independent of whether they're downstream from a source asset or a derived asset. This makes it easy to swap out a source asset for a derived asset and vice versa.
 
@@ -174,12 +139,12 @@ By default, materializing an asset will pickle it to a local file named "my_asse
 
 [IO managers](/concepts/io-management/io-managers) enable fully overriding this behavior and storing asset contents in any way you wish - e.g. writing them as tables in a database or as objects in a cloud object store. Dagster also provides built-in IO managers that pickle assets to AWS S3 (<PyObject module="dagster_aws.s3" object="s3_pickle_asset_io_manager" />), Azure Blob Storage (<PyObject module="dagster_azure.adls2" object="adls2_pickle_asset_io_manager" />), and GCS (<PyObject module="dagster_gcp.gcs" object="gcs_pickle_asset_io_manager" />), or you can write your own.
 
-To apply an IO manager to a set of assets, you can include it with them in an <PyObject object="AssetGroup" />.
+To apply an IO manager to a set of assets, you can use <PyObject object="with_resources" />:
 
 ```python file=/concepts/assets/asset_io_manager.py startafter=start_marker endbefore=end_marker
 from dagster_aws.s3 import s3_pickle_asset_io_manager, s3_resource
 
-from dagster import AssetGroup, asset
+from dagster import asset, with_resources
 
 
 @asset
@@ -192,7 +157,7 @@ def downstream_asset(upstream_asset):
     return upstream_asset + [4]
 
 
-asset_group = AssetGroup(
+assets_with_io_manager = with_resources(
     [upstream_asset, downstream_asset],
     resource_defs={"io_manager": s3_pickle_asset_io_manager, "s3": s3_resource},
 )
@@ -207,7 +172,7 @@ Different assets can have different IO managers:
 ```python file=/concepts/assets/asset_different_io_managers.py startafter=start_marker endbefore=end_marker
 from dagster_aws.s3 import s3_pickle_asset_io_manager, s3_resource
 
-from dagster import AssetGroup, asset, fs_asset_io_manager
+from dagster import asset, fs_asset_io_manager, with_resources
 
 
 @asset(io_manager_key="s3_io_manager")
@@ -220,7 +185,7 @@ def downstream_asset(upstream_asset):
     return upstream_asset + [4]
 
 
-asset_group = AssetGroup(
+assets_with_io_managers = with_resources(
     [upstream_asset, downstream_asset],
     resource_defs={
         "s3_io_manager": s3_pickle_asset_io_manager,
@@ -237,7 +202,7 @@ The same assets can be bound to different resources and IO managers in different
 ```python file=/concepts/assets/asset_io_manager_prod_local.py startafter=start_marker endbefore=end_marker
 from dagster_aws.s3 import s3_pickle_asset_io_manager, s3_resource
 
-from dagster import AssetGroup, asset, fs_asset_io_manager
+from dagster import asset, fs_asset_io_manager, with_resources
 
 
 @asset
@@ -250,12 +215,12 @@ def downstream_asset(upstream_asset):
     return upstream_asset + [4]
 
 
-prod_asset_group = AssetGroup(
+prod_assets = with_resources(
     [upstream_asset, downstream_asset],
     resource_defs={"io_manager": s3_pickle_asset_io_manager, "s3": s3_resource},
 )
 
-local_asset_group = AssetGroup(
+local_assets = with_resources(
     [upstream_asset, downstream_asset],
     resource_defs={"io_manager": fs_asset_io_manager},
 )
@@ -263,12 +228,10 @@ local_asset_group = AssetGroup(
 
 ## Building jobs that materialize assets
 
-You can define a job that materializes a fixed selection of the assets in an <PyObject object="AssetGroup" /> each time it runs.
-
-The following snippet shows examples of three different jobs you might create out of an <PyObject object="AssetGroup" />.
+You can define a job that materializes a fixed selection of assets each time it runs. Multiple jobs within the same repository can target overlapping sets of assets.
 
 ```python file=/concepts/assets/build_job.py startafter=start_marker endbefore=end_marker
-from dagster import AssetGroup, asset
+from dagster import build_assets_job, asset
 
 
 @asset
@@ -281,25 +244,8 @@ def downstream_1(upstream):
     return upstream + [4]
 
 
-@asset
-def downstream_2(upstream):
-    return len(upstream)
-
-
-asset_group = AssetGroup([upstream, downstream_1, downstream_2])
-
-all_assets = asset_group.build_job(name="my_asset_job")
-
-downstream_assets = asset_group.build_job(
-    name="my_asset_job", selection=["upstream", "downstream_1"]
-)
-
-upstream_and_downstream_1 = asset_group.build_job(
-    name="my_asset_job", selection="*downstream_1"
-)
+all_assets = build_assets_job([upstream, downstream_1])
 ```
-
-Multiple jobs within the same repository can target overlapping sets of assets.
 
 Like regular jobs, asset jobs can be placed on [schedules](/concepts/partitions-schedules-sensors/schedules) and [sensors](/concepts/partitions-schedules-sensors/sensors).
 
