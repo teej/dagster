@@ -292,6 +292,7 @@ const AssetGrid: React.FC<{
 
   const {liveResult, liveDataByNode} = useLiveDataForAssetKeys(
     null,
+    assetGraphData?.nodes,
     assetGraphData,
     expandedAssetKeys,
   );

@@ -4,7 +4,12 @@ import React from 'react';
 import {AssetKeyInput, PipelineSelector} from '../types/globalTypes';
 
 import {ASSET_NODE_LIVE_FRAGMENT} from './AssetNode';
-import {buildLiveData, GraphData, REPOSITORY_LIVE_FRAGMENT} from './Utils';
+import {
+  buildLiveData,
+  GraphData,
+  AssetDefinitionsForLiveData,
+  REPOSITORY_LIVE_FRAGMENT,
+} from './Utils';
 import {AssetGraphLiveQuery, AssetGraphLiveQueryVariables} from './types/AssetGraphLiveQuery';
 
 /** Fetches the last materialization, "upstream changed", and other live state
@@ -15,7 +20,8 @@ import {AssetGraphLiveQuery, AssetGraphLiveQueryVariables} from './types/AssetGr
  */
 export function useLiveDataForAssetKeys(
   pipelineSelector: PipelineSelector | null | undefined,
-  graphData: GraphData | null,
+  assets: AssetDefinitionsForLiveData | undefined,
+  graphForUpstreamChanged: GraphData | null,
   graphAssetKeys: AssetKeyInput[],
 ) {
   const liveResult = useQuery<AssetGraphLiveQuery, AssetGraphLiveQueryVariables>(
@@ -36,7 +42,7 @@ export function useLiveDataForAssetKeys(
   );
 
   const liveDataByNode = React.useMemo(() => {
-    if (!liveResult.data || !graphData) {
+    if (!liveResult.data || !assets) {
       return {};
     }
 
@@ -44,8 +50,8 @@ export function useLiveDataForAssetKeys(
     const repos =
       repositoriesOrError.__typename === 'RepositoryConnection' ? repositoriesOrError.nodes : [];
 
-    return buildLiveData(graphData, liveAssetNodes, repos);
-  }, [graphData, liveResult]);
+    return buildLiveData(assets, liveAssetNodes, repos, graphForUpstreamChanged);
+  }, [assets, graphForUpstreamChanged, liveResult]);
 
   return {
     liveResult,
@@ -55,7 +61,15 @@ export function useLiveDataForAssetKeys(
 }
 
 const ASSETS_GRAPH_LIVE_QUERY = gql`
-  query AssetGraphLiveQuery($repositorySelector: RepositorySelector, $assetKeys: [AssetKeyInput!]) {
+  query AssetGraphLiveQuery($assetKeys: [AssetKeyInput!]) {
+    inProgressRunsByStep {
+      ...InProgressRunsFragment
+    }
+    latestRunByStep {
+      __typename
+      ...LastRunsWarningsFragment
+    }
+
     repositoriesOrError(repositorySelector: $repositorySelector) {
       __typename
       ... on RepositoryConnection {
@@ -66,6 +80,8 @@ const ASSETS_GRAPH_LIVE_QUERY = gql`
         }
       }
     }
+    liveData
+
     assetNodes(assetKeys: $assetKeys, loadMaterializations: true) {
       id
       ...AssetNodeLiveFragment

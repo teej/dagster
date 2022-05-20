@@ -225,23 +225,34 @@ export interface LiveData {
   [assetId: GraphId]: LiveDataForNode;
 }
 
+export interface AssetDefinitionsForLiveData {
+  [id: string]: {
+    definition: {
+      partitionDefinition: string | null;
+      jobNames: string[];
+      opNames: string[];
+    };
+  };
+}
+
 export const buildLiveData = (
-  graph: GraphData,
+  assets: AssetDefinitionsForLiveData,
   nodes: AssetNodeLiveFragment[],
   repos: RepositoryLiveFragment[],
+  graphForUpstreamChanged: GraphData | null,
 ) => {
   const data: LiveData = {};
 
   for (const liveNode of nodes) {
     const graphId = toGraphId(liveNode.assetKey);
-    const graphNode = graph.nodes[graphId];
-    if (!graphNode) {
-      console.warn(`buildLiveData could not find the graph node matching ${graphId}`);
+    const definition = assets[graphId]?.definition;
+    if (!definition) {
+      console.warn(`buildLiveData could not find the definition matching ${graphId}`);
       continue;
     }
     const lastMaterialization = liveNode.assetMaterializations[0] || null;
     const lastChanged = Number(lastMaterialization?.timestamp || 0) / 1000;
-    const isPartitioned = graphNode.definition.partitionDefinition;
+    const isPartitioned = definition.partitionDefinition;
     const repo = repos.find((r) => r.id === liveNode.repository.id);
 
     const runs = repo?.inProgressRunsByStep.find((r) => liveNode.opNames.includes(r.stepKey));
@@ -261,7 +272,7 @@ export const buildLiveData = (
       inProgressRunIds: runs?.inProgressRuns.map((r) => r.id) || [],
       unstartedRunIds: runs?.unstartedRuns.map((r) => r.id) || [],
       runWhichFailedToMaterialize,
-      computeStatus: isSourceAsset(graphNode.definition)
+      computeStatus: isSourceAsset(definition)
         ? 'good' // foreign nodes are always considered up-to-date
         : isPartitioned
         ? // partitioned nodes are not supported, need to compare materializations
@@ -273,8 +284,14 @@ export const buildLiveData = (
     };
   }
 
-  for (const liveNodeId of Object.keys(data)) {
-    data[liveNodeId].computeStatus = findComputeStatusForId(data, graph.upstream, liveNodeId);
+  if (graphForUpstreamChanged) {
+    for (const liveNodeId of Object.keys(data)) {
+      data[liveNodeId].computeStatus = findComputeStatusForId(
+        data,
+        graphForUpstreamChanged.upstream,
+        liveNodeId,
+      );
+    }
   }
 
   return data;

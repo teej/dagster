@@ -99,6 +99,7 @@ export const AssetGraphExplorer: React.FC<Props> = (props) => {
 
   const {liveResult, liveDataByNode} = useLiveDataForAssetKeys(
     props.pipelineSelector,
+    assetGraphData?.nodes,
     assetGraphData,
     graphAssetKeys,
   );

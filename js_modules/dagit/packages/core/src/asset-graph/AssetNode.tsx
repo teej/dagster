@@ -41,8 +41,7 @@ export const AssetNode: React.FC<{
     maxLength: ASSET_NODE_NAME_MAX_LENGTH,
   });
 
-  const {lastMaterialization, unstartedRunIds, inProgressRunIds, runWhichFailedToMaterialize} =
-    liveData || MISSING_LIVE_DATA;
+  const {lastMaterialization} = liveData || MISSING_LIVE_DATA;
 
   return (
     <AssetNodeContainer $selected={selected} $padded={padded}>
@@ -86,15 +85,17 @@ export const AssetNode: React.FC<{
           {lastMaterialization ? (
             <StatsRow>
               <span>Materialized</span>
-              <AssetRunLink
-                runId={lastMaterialization.runId}
-                event={{stepKey, timestamp: lastMaterialization.timestamp}}
-              >
-                <TimestampDisplay
-                  timestamp={Number(lastMaterialization.timestamp) / 1000}
-                  timeFormat={{showSeconds: false, showTimezone: false}}
-                />
-              </AssetRunLink>
+              <CaptionMono>
+                <AssetRunLink
+                  runId={lastMaterialization.runId}
+                  event={{stepKey, timestamp: lastMaterialization.timestamp}}
+                >
+                  <TimestampDisplay
+                    timestamp={Number(lastMaterialization.timestamp) / 1000}
+                    timeFormat={{showSeconds: false, showTimezone: false}}
+                  />
+                </AssetRunLink>
+              </CaptionMono>
             </StatsRow>
           ) : (
             <>
@@ -106,40 +107,9 @@ export const AssetNode: React.FC<{
           )}
           <StatsRow>
             <span>Latest Run</span>
-
-            {inProgressRunIds?.length > 0 ? (
-              <Box flex={{gap: 4, alignItems: 'center'}}>
-                <Tooltip content="A run is currently rematerializing this asset.">
-                  <Spinner purpose="body-text" />
-                </Tooltip>
-                <AssetRunLink runId={inProgressRunIds[0]} />
-              </Box>
-            ) : unstartedRunIds?.length > 0 ? (
-              <Box flex={{gap: 4, alignItems: 'center'}}>
-                <Tooltip content="A run has started that will rematerialize this asset soon.">
-                  <Spinner purpose="body-text" stopped />
-                </Tooltip>
-                <AssetRunLink runId={unstartedRunIds[0]} />
-              </Box>
-            ) : runWhichFailedToMaterialize?.__typename === 'Run' ? (
-              <Box flex={{gap: 4, alignItems: 'center'}}>
-                <Tooltip
-                  content={`Run ${titleForRun({
-                    runId: runWhichFailedToMaterialize.id,
-                  })} failed to materialize this asset`}
-                >
-                  <Icon name="warning" color={Colors.Red500} />
-                </Tooltip>
-                <AssetRunLink runId={runWhichFailedToMaterialize.id} />
-              </Box>
-            ) : lastMaterialization ? (
-              <AssetRunLink
-                runId={lastMaterialization.runId}
-                event={{stepKey, timestamp: lastMaterialization.timestamp}}
-              />
-            ) : (
-              <span>–</span>
-            )}
+            <CaptionMono>
+              <AssetLatestRunWithNotices liveData={liveData} stepKey={stepKey} />
+            </CaptionMono>
           </StatsRow>
         </Stats>
         {definition.computeKind && (
@@ -198,7 +168,7 @@ export const AssetRunLink: React.FC<{
     target="_blank"
     rel="noreferrer"
   >
-    {children || <CaptionMono>{titleForRun({runId})}</CaptionMono>}
+    {children || titleForRun({runId})}
   </Link>
 );
 
@@ -336,3 +306,45 @@ const UpstreamNotice = styled.div`
   margin-right: -6px;
   border-top-right-radius: 3px;
 `;
+
+export const AssetLatestRunWithNotices: React.FC<{
+  liveData?: LiveDataForNode;
+  stepKey: string;
+}> = ({liveData, stepKey}) => {
+  const {lastMaterialization, unstartedRunIds, inProgressRunIds, runWhichFailedToMaterialize} =
+    liveData || MISSING_LIVE_DATA;
+
+  return inProgressRunIds?.length > 0 ? (
+    <Box flex={{gap: 4, alignItems: 'center'}}>
+      <Tooltip content="A run is currently rematerializing this asset.">
+        <Spinner purpose="body-text" />
+      </Tooltip>
+      <AssetRunLink runId={inProgressRunIds[0]} />
+    </Box>
+  ) : unstartedRunIds?.length > 0 ? (
+    <Box flex={{gap: 4, alignItems: 'center'}}>
+      <Tooltip content="A run has started that will rematerialize this asset soon.">
+        <Spinner purpose="body-text" stopped />
+      </Tooltip>
+      <AssetRunLink runId={unstartedRunIds[0]} />
+    </Box>
+  ) : runWhichFailedToMaterialize?.__typename === 'Run' ? (
+    <Box flex={{gap: 4, alignItems: 'center'}}>
+      <Tooltip
+        content={`Run ${titleForRun({
+          runId: runWhichFailedToMaterialize.id,
+        })} failed to materialize this asset`}
+      >
+        <Icon name="warning" color={Colors.Red500} />
+      </Tooltip>
+      <AssetRunLink runId={runWhichFailedToMaterialize.id} />
+    </Box>
+  ) : lastMaterialization ? (
+    <AssetRunLink
+      runId={lastMaterialization.runId}
+      event={{stepKey, timestamp: lastMaterialization.timestamp}}
+    />
+  ) : (
+    <span>–</span>
+  );
+};
