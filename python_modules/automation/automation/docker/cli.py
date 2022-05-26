@@ -1,9 +1,11 @@
+import os
 from typing import List, Optional
 
 import click
 
 import dagster._check as check
 
+from ..git import git_repo_root
 from .dagster_docker import DagsterDockerImage
 from .ecr import ensure_ecr_login
 from .image_defs import get_image, list_images
@@ -48,6 +50,12 @@ opt_build_timestamp = click.option(
 )
 
 
+def _get_images_path():
+    return os.path.join(
+        git_repo_root(), "python_modules", "automation", "automation", "docker", "images"
+    )
+
+
 @cli.command()
 @opt_build_name
 @opt_build_dagster_version
@@ -57,7 +65,7 @@ opt_build_timestamp = click.option(
 def build(
     name: str, dagster_version: str, timestamp: str, python_version: str, platform: Optional[str]
 ):
-    get_image(name).build(timestamp, dagster_version, python_version, platform)
+    get_image(name, _get_images_path()).build(timestamp, dagster_version, python_version, platform)
 
 
 @cli.command()
@@ -67,7 +75,8 @@ def build(
 @opt_build_platform
 def build_all(name: str, dagster_version: str, timestamp: str, platform: Optional[str]):
     """Build all supported python versions for image"""
-    image = get_image(name)
+
+    image = get_image(name, _get_images_path())
 
     for python_version in image.python_versions:
         image.build(timestamp, dagster_version, python_version, platform)
@@ -88,23 +97,24 @@ opt_push_dagster_version = click.option(
 @click.option("--custom-tag", type=click.STRING, required=False)
 def push(name: str, python_version: str, custom_tag: Optional[str]):
     ensure_ecr_login()
-    get_image(name).push(python_version, custom_tag=custom_tag)
+    get_image(name, _get_images_path()).push(python_version, custom_tag=custom_tag)
 
 
 @cli.command()
 @opt_push_name
 def push_all(name: str):
     ensure_ecr_login()
-    image = get_image(name)
+    image = get_image(name, _get_images_path())
     for python_version in image.python_versions:
         image.push(python_version)
 
 
-def push_to_registry(name: str, tags: List[str]) -> None:
+def push_to_registry(name: str, tags: List[str], images_path: str) -> None:
     check.str_param(name, "name")
     check.list_param(tags, "tags", of_type=str)
+    check.str_param(images_path, "images_path")
 
-    image = DagsterDockerImage(name)
+    image = DagsterDockerImage(name, images_path=images_path)
 
     python_version = next(iter(image.python_versions))
 
@@ -125,7 +135,7 @@ def push_dockerhub(name: str, dagster_version: str):
 
     tags = [f"dagster/{name}:{dagster_version}", f"dagster/{name}:latest"]
 
-    push_to_registry(name, tags)
+    push_to_registry(name, tags, _get_images_path())
 
 
 @cli.command()
@@ -144,7 +154,7 @@ def push_ecr(name: str, dagster_version: str):
         f"{AWS_ECR_REGISTRY}/{name}:latest",
     ]
 
-    push_to_registry(name, tags)
+    push_to_registry(name, tags, _get_images_path())
 
 
 def main():

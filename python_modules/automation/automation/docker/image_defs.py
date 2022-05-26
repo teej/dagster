@@ -200,7 +200,7 @@ CUSTOM_BUILD_CONTEXTMANAGERS: Dict[str, Callable] = {
 }
 
 
-def list_images(images_path: Optional[str] = None) -> List[DagsterDockerImage]:
+def list_images(images_path: str) -> List[DagsterDockerImage]:
     """List all images that we manage.
 
     Returns:
@@ -212,14 +212,14 @@ def list_images(images_path: Optional[str] = None) -> List[DagsterDockerImage]:
 
     images = []
     for image in image_folders:
-        img = DagsterDockerImage(image, path=os.path.join(images_path, image))
+        img = DagsterDockerImage(image, images_path=images_path)
         if image in CUSTOM_BUILD_CONTEXTMANAGERS:
             img = img._replace(build_cm=CUSTOM_BUILD_CONTEXTMANAGERS[image])
         images.append(img)
     return images
 
 
-def get_image(name: str, images_path: Optional[str] = None) -> DagsterDockerImage:
+def get_image(name: str, images_path: str) -> DagsterDockerImage:
     """Retrieve the image information from the list defined above."""
     image = next((img for img in list_images(images_path=images_path) if img.image == name), None)
     return check.not_none(image, "could not find image {}".format(name))
