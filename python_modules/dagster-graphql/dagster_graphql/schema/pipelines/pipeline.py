@@ -10,7 +10,6 @@ from dagster.core.storage.pipeline_run import PipelineRunStatus, RunRecord, Runs
 from dagster.core.storage.tags import TagType, get_tag_type
 from dagster.utils import datetime_as_float
 
-from ...implementation.events import from_event_record
 from ...implementation.fetch_assets import get_assets_for_run_id
 from ...implementation.fetch_pipelines import get_pipeline_reference_or_raise
 from ...implementation.fetch_runs import get_runs, get_stats, get_step_stats
@@ -167,12 +166,6 @@ class GrapheneAsset(graphene.ObjectType):
         ]
 
 
-class GrapheneEventConnection(graphene.ObjectType):
-    events = non_null_list(GrapheneDagsterRunEvent)
-    cursor = graphene.NonNull(graphene.String)
-    hasMore = graphene.NonNull(graphene.Boolean)
-
-
 class GraphenePipelineRun(graphene.Interface):
     id = graphene.NonNull(graphene.ID)
     runId = graphene.NonNull(graphene.String)
@@ -203,10 +196,6 @@ class GraphenePipelineRun(graphene.Interface):
     parentRunId = graphene.Field(graphene.String)
     canTerminate = graphene.NonNull(graphene.Boolean)
     assets = non_null_list(GrapheneAsset)
-    eventConnection = graphene.Field(
-        graphene.NonNull(GrapheneEventConnection),
-        afterCursor=graphene.Argument(graphene.String),
-    )
 
     class Meta:
         name = "PipelineRun"
@@ -245,10 +234,6 @@ class GrapheneRun(graphene.ObjectType):
     canTerminate = graphene.NonNull(graphene.Boolean)
     assetMaterializations = non_null_list(GrapheneMaterializationEvent)
     assets = non_null_list(GrapheneAsset)
-    eventConnection = graphene.Field(
-        graphene.NonNull(GrapheneEventConnection),
-        afterCursor=graphene.Argument(graphene.String),
-    )
     startTime = graphene.Float()
     endTime = graphene.Float()
     updateTime = graphene.Float()
@@ -379,17 +364,6 @@ class GrapheneRun(graphene.ObjectType):
                 self.run_id, of_type=DagsterEventType.ASSET_MATERIALIZATION
             )
         ]
-
-    def resolve_eventConnection(self, graphene_info, afterCursor=None):
-        conn = graphene_info.context.instance.get_records_for_run(self.run_id, cursor=afterCursor)
-        return GrapheneEventConnection(
-            events=[
-                from_event_record(record.event_log_entry, self._pipeline_run.pipeline_name)
-                for record in conn.records
-            ],
-            cursor=conn.cursor,
-            hasMore=conn.has_more,
-        )
 
     def _get_run_record(self, instance):
         if not self._run_record:
@@ -808,3 +782,18 @@ class GrapheneLatestRun(graphene.ObjectType):
 
     class Meta:
         name = "LatestRun"
+
+
+class GrapheneEventConnection(graphene.ObjectType):
+    class Meta:
+        name = "EventConnection"
+
+    events = non_null_list(GrapheneDagsterRunEvent)
+    cursor = graphene.NonNull(graphene.String)
+    hasMore = graphene.NonNull(graphene.Boolean)
+
+
+class GrapheneEventConnectionOrError(graphene.Union):
+    class Meta:
+        types = (GrapheneEventConnection, GrapheneRunNotFoundError, GraphenePythonError)
+        name = "EventConnectionOrError"

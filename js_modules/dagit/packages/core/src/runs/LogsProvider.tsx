@@ -212,8 +212,8 @@ const LogsProviderWithQuery = (props: LogsProviderWithQueryProps) => {
 
         const slice = () => {
           const count = nodes.length;
-          if (data?.pipelineRunOrError.__typename === 'Run') {
-            return data?.pipelineRunOrError.eventConnection.events.map((event, ii) => ({
+          if (data?.logsForRun.__typename === 'EventConnection') {
+            return data?.logsForRun.events.map((event, ii) => ({
               ...event,
               clientsideKey: `csk${count + ii}`,
             }));
@@ -223,8 +223,8 @@ const LogsProviderWithQuery = (props: LogsProviderWithQueryProps) => {
 
         const newSlice = slice();
         setNodes((current) => [...current, ...newSlice]);
-        if (data?.pipelineRunOrError.__typename === 'Run') {
-          setCursor(data.pipelineRunOrError.eventConnection.cursor);
+        if (data?.logsForRun.__typename === 'EventConnection') {
+          setCursor(data.logsForRun.cursor);
         }
 
         const status =
@@ -310,16 +310,22 @@ const RUN_LOGS_QUERY = gql`
         runId
         status
         canTerminate
-        eventConnection(afterCursor: $cursor) {
-          events {
-            __typename
-            ... on MessageEvent {
-              runId
-            }
-            ...RunDagsterRunEventFragment
+      }
+    }
+    logsForRun(runId: $runId, afterCursor: $cursor) {
+      ... on EventConnection {
+        events {
+          __typename
+          ... on MessageEvent {
+            runId
           }
-          cursor
+          ...RunDagsterRunEventFragment
         }
+        cursor
+      }
+      ... on PythonError {
+        message
+        stack
       }
     }
   }
